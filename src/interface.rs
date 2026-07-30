@@ -37,6 +37,7 @@ impl PathSegment {
 }
 
 /**
+uri of the project
 Path: (project_name/)+(task_name)?
 */
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -222,7 +223,7 @@ pub trait ProjectStorage {
 
     fn get_projects_path(&mut self) -> Result<Vec<ProjectDir>>;
     fn get_project(&mut self, path: ProjectDir) -> Result<Project>;
-    fn get_project_location(&mut self, path: ProjectDir) -> Result<Location>;
+    fn get_storage_location(&mut self, path: ProjectDir) -> Result<Location>;
     fn promote_task(&mut self, path: ProjectDir) -> Result<()>;
     fn get_task(&mut self, path: ProjectDir) -> Result<Task>;
 
@@ -234,8 +235,9 @@ pub trait ProjectStorage {
         &mut self,
         path: ProjectDir,
         project: Project,
-        location: Location,
+        storage_location: Location,
     ) -> Result<()>;
+
     /** add todo task */
     fn insert_task_todo(&mut self, path: ProjectDir, task: Task) -> Result<()>;
     /** add done task */

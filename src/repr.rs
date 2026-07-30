@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use super::version::Version;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Location {
     Local(PathBuf),
     URL(String),

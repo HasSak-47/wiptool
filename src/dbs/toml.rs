@@ -49,7 +49,7 @@ idealy it should be a status.toml at the root of the project dir
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatusDB {
     pub project: Project,
-    pub location: Location,
+    pub storage_location: Location,
 }
 
 impl StatusDB {
@@ -62,8 +62,8 @@ impl StatusDB {
         return Ok(());
     }
 
-    pub fn new(location: Location) -> Result<Self> {
-        let string = match &location {
+    pub fn new(storage_location: Location) -> Result<Self> {
+        let string = match &storage_location {
             Location::Local(path) => {
                 log::debug!("loading toml file at: {}", path.display());
                 let mut file = File::open(path)?;
@@ -78,7 +78,7 @@ impl StatusDB {
 
         return Ok(StatusDB {
             project: project,
-            location: location,
+            storage_location,
         });
     }
 }
@@ -120,7 +120,7 @@ impl ProjectStorage for StatusDB {
             version: self.project.project.version.clone(),
             edition: self.project.project.edition.clone(),
 
-            location: Some(self.location.clone()),
+            location: None,
             name: self.project.project.name.clone(),
             description: self.project.project.description.clone(),
             subprojects: Vec::new(),
@@ -178,7 +178,7 @@ impl ProjectStorage for StatusDB {
     }
 
     fn commit_changes(&mut self) -> Result<()> {
-        let path = if let Location::Local(path) = &self.location {
+        let path = if let Location::Local(path) = &self.storage_location {
             path
         } else {
             bail!("Cannot edit url data")
@@ -193,6 +193,11 @@ impl ProjectStorage for StatusDB {
 
     fn create_project(&mut self, _: ProjectDir, _: repr::Project, _: Location) -> Result<()> {
         bail!("Creating project not available for Basic TOML DB")
+    }
+
+    fn get_storage_location(&mut self, path: ProjectDir) -> Result<Location> {
+        self.ensure_project(&path)?;
+        Ok(self.storage_location.clone())
     }
 
     fn insert_task_done(
@@ -249,36 +254,30 @@ impl ProjectStorage for StatusDB {
 
         return Ok(());
     }
-    fn get_project_location(&mut self, path: ProjectDir) -> Result<Location> {
-        self.ensure_project(&path)?;
-        return Ok(self.location.clone());
-    }
 
     fn delete_project(&mut self, _: ProjectDir) -> Result<()> {
         todo!()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 struct StatusInstance {
-    location: Location,
+    storage_location: Location,
+    project_location: Option<Location>,
 
+    #[serde(skip)]
     db: Option<StatusDB>,
 }
 
 /**
 keeps track of all the status.toml databases
 */
-#[derive(Debug, Default)]
-pub struct StatusCluster {
-    instances: HashMap<ProjectDir, StatusInstance>,
-    db_path: PathBuf,
-}
-
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct StatusClusterDB {
-    #[serde(flatten, skip_serializing_if = "HashMap::is_empty")]
-    instances: HashMap<String, Location>,
+pub struct StatusCluster {
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
+    instances: HashMap<ProjectDir, StatusInstance>,
+    #[serde(skip)]
+    db_path: PathBuf,
 }
 
 use crate::repr;
@@ -298,37 +297,10 @@ impl StatusCluster {
         })
     }
 
-    fn path_to_string(path: &ProjectDir) -> Result<String> {
-        ensure!(path.len() >= 1, "path must contain at least one segment");
-
-        let mut parts = Vec::with_capacity(path.len());
-        for i in 0..path.len() {
-            let section = path.get_section(i);
-            ensure!(
-                !(section.is_task() && i + 1 != path.len()),
-                "invalid path: task segment can only appear at the end"
-            );
-            parts.push(section.get_name());
-        }
-
-        let mut s = parts.join("/");
-        if !path.get_section(path.len() - 1).is_task() {
-            s.push('/');
-        }
-
-        Ok(s)
-    }
-
     pub fn save(&self) -> Result<()> {
-        let mut instances = HashMap::with_capacity(self.instances.len());
-
-        for (path, instance) in &self.instances {
-            instances.insert(Self::path_to_string(path)?, instance.location.clone());
-        }
-
-        let data = StatusClusterDB { instances };
+        log::info!("saving db @ {}", self.db_path.display());
         let mut file = File::create(&self.db_path)?;
-        let buf = toml::to_string_pretty(&data)?;
+        let buf = toml::to_string_pretty(self)?;
         file.write_all(buf.as_bytes())?;
 
         Ok(())
@@ -339,24 +311,9 @@ impl StatusCluster {
         let mut buf = String::new();
 
         file.read_to_string(&mut buf)?;
-        let data: StatusClusterDB = toml::from_str(buf.as_str())?;
-        return Ok(Self {
-            db_path: path.as_ref().to_path_buf(),
-            instances: data
-                .instances
-                .iter()
-                .map(|(path, instance)| {
-                    (
-                        // WARN: this is bad lmao
-                        ProjectDir::try_from(path.as_str()).unwrap(),
-                        StatusInstance {
-                            location: instance.clone(),
-                            db: None,
-                        },
-                    )
-                })
-                .collect(),
-        });
+        let mut data: StatusCluster = toml::from_str(buf.as_str())?;
+        data.db_path = path.as_ref().to_path_buf();
+        return Ok(data);
     }
 
     fn get_instance_db(&mut self, path: &ProjectDir) -> Result<&mut StatusDB> {
@@ -367,7 +324,7 @@ impl StatusCluster {
             .ok_or(anyhow!("could not find project"))?;
 
         if instance.db.is_none() {
-            instance.db = Some(StatusDB::new(instance.location.clone())?);
+            instance.db = Some(StatusDB::new(instance.storage_location.clone())?);
         }
 
         Ok(instance.db.as_mut().unwrap())
@@ -401,7 +358,25 @@ impl ProjectStorage for StatusCluster {
     }
 
     fn get_project(&mut self, path: ProjectDir) -> Result<repr::Project> {
-        self.get_instance_db(&path)?.get_project(path)
+        let root = Self::root_path(&path)?;
+        let project_location = self
+            .instances
+            .get(&root)
+            .ok_or(anyhow!("project not found"))?
+            .project_location
+            .clone();
+
+        let mut project = self.get_instance_db(&path)?.get_project(path)?;
+        project.location = project_location;
+        Ok(project)
+    }
+
+    fn get_storage_location(&mut self, path: ProjectDir) -> Result<Location> {
+        let root = Self::root_path(&path)?;
+        self.instances
+            .get(&root)
+            .map(|instance| instance.storage_location.clone())
+            .ok_or(anyhow!("project not found"))
     }
 
     fn promote_task(&mut self, path: ProjectDir) -> Result<()> {
@@ -428,12 +403,13 @@ impl ProjectStorage for StatusCluster {
         &mut self,
         path: ProjectDir,
         project: repr::Project,
-        location: Location,
+        storage_location: Location,
     ) -> Result<()> {
         if self.instances.contains_key(&path) {
             bail!("project already exists at given path");
         }
 
+        let project_location = project.location;
         let db_project = Project {
             project: ProjectHeader {
                 version: project.version,
@@ -472,14 +448,15 @@ impl ProjectStorage for StatusCluster {
 
         let mut db = StatusDB {
             project: db_project,
-            location: location.clone(),
+            storage_location: storage_location.clone(),
         };
         db.commit_changes()?;
 
         self.instances.insert(
             path,
             StatusInstance {
-                location,
+                storage_location,
+                project_location,
                 db: Some(db),
             },
         );
@@ -502,14 +479,6 @@ impl ProjectStorage for StatusCluster {
     /* makes task as todo */
     fn mark_todo_task(&mut self, path: ProjectDir) -> Result<()> {
         self.get_instance_db(&path)?.mark_todo_task(path)
-    }
-
-    fn get_project_location(&mut self, path: ProjectDir) -> Result<Location> {
-        return self
-            .instances
-            .get(&path)
-            .ok_or(anyhow!("project not found"))
-            .and_then(|p| Ok(p.location.clone()));
     }
 
     fn delete_project(&mut self, path: ProjectDir) -> Result<()> {
