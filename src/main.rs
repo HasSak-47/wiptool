@@ -1,4 +1,5 @@
 pub mod dbs;
+pub mod inner_log;
 pub mod interface;
 pub mod repr;
 pub mod version;
@@ -8,7 +9,11 @@ use std::{env::current_dir, fs::File, path::PathBuf};
 use anyhow::{bail, Result};
 use clap::{Args, Parser, Subcommand};
 
-use crate::interface::{Path, ProjectStorage};
+use crate::{
+    inner_log::init_log,
+    interface::{ProjectDir, ProjectStorage},
+    repr::Location,
+};
 
 #[derive(Parser, Clone)]
 #[command(version, about, long_about = None)]
@@ -50,7 +55,7 @@ struct NewProject {
 
 impl NewProject {
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
-        let mut path = Path::new();
+        let mut path = ProjectDir::new();
         path.add_project(self.name.clone())?;
 
         let mut project = repr::Project::default();
@@ -86,6 +91,28 @@ struct InitProject {
 #[derive(Parser, Clone)]
 struct DeleteProject {
     name: String,
+
+    #[arg(long = "soft-delete", default_value_t = false)]
+    soft: bool,
+}
+
+impl DeleteProject {
+    pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> anyhow::Result<()> {
+        let loc = ProjectDir::parse(&format!("{}/", self.name))?;
+        log::debug!("deleting project: {}", loc);
+        if !self.soft {
+            let location = storage.get_project_location(loc.clone())?;
+            if let Location::Local(path) = location {
+                log::debug!("deleting toml path: {}", path.display());
+                if let Err(e) = std::fs::remove_file(path) {
+                    log::error!("{}", e);
+                }
+            }
+        }
+        storage.delete_project(loc)?;
+        storage.commit_changes()?;
+        return Ok(());
+    }
 }
 
 #[derive(Parser, Clone)]
@@ -108,7 +135,7 @@ impl AddTask {
 
         let project = self.project.clone() + if self.project.ends_with("/") { "" } else { "/" };
 
-        let path = Path::parse(&project)?;
+        let path = ProjectDir::parse(&project)?;
 
         let mut task_path = path.clone();
         task_path.add_task(&self.name)?;
@@ -159,6 +186,7 @@ impl List {
 
         if self.location {
             for path in paths {
+                log::debug!("getting path: {path:?}",);
                 let project = storage.get_project(path.clone())?;
                 match project.location {
                     Some(crate::repr::Location::Local(project_location)) => {
@@ -215,15 +243,19 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
+    init_log();
+
     let cli = CLI::parse();
     let mut opts = cli.opts;
 
-    let mut builder = env_logger::builder();
     if opts.debug {
-        builder.filter_level(log::LevelFilter::Debug);
+        ::log::set_max_level(log::LevelFilter::Debug);
+    } else if opts.verbose {
+        ::log::set_max_level(log::LevelFilter::Info);
+    } else if opts.verbose {
+        ::log::set_max_level(log::LevelFilter::Warn);
     }
-
-    builder.init();
+    log::debug!("running on debug mode");
 
     if let Err(e) = std::fs::create_dir(&opts.db_path) {
         match e.kind() {
@@ -238,13 +270,15 @@ fn main() -> Result<()> {
         let _ = File::create(&opts.db_path);
     }
 
-    let mut storage: Box<dyn ProjectStorage> =
-        Box::new(crate::dbs::toml::StatusCluster::load(&opts.db_path)?);
+    let cluster = crate::dbs::toml::StatusCluster::load(&opts.db_path)?;
+    log::debug!("storage: {cluster:#?}");
+    let mut storage: Box<dyn ProjectStorage> = Box::new(cluster);
 
     match cli.command {
         Commands::List(l) => l.run(&opts, &mut storage)?,
         Commands::NewProject(new) => new.run(&opts, &mut storage)?,
         Commands::AddTask(task) => task.run(&opts, &mut storage)?,
+        Commands::DeleteProject(delete) => delete.run(&opts, &mut storage)?,
         _ => todo!("Todo"),
     }
     return Ok(());

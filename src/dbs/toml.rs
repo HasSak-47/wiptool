@@ -1,5 +1,5 @@
 use crate::{
-    interface::{Path, ProjectStorage},
+    interface::{ProjectDir, ProjectStorage},
     repr::Location,
     version::Version,
 };
@@ -22,7 +22,7 @@ pub struct ProjectHeader {
     pub description: String,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub subprojects: Vec<Path>,
+    pub subprojects: Vec<ProjectDir>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -53,10 +53,10 @@ pub struct StatusDB {
 }
 
 impl StatusDB {
-    pub fn ensure_project(&self, path: &Path) -> Result<()> {
+    pub fn ensure_project(&self, path: &ProjectDir) -> Result<()> {
         ensure!(
             self.project.project.name == path.get_section(0).get_name(),
-            "you can only get a name the root project name"
+            "you can only get a name of the root project name"
         );
 
         return Ok(());
@@ -65,6 +65,7 @@ impl StatusDB {
     pub fn new(location: Location) -> Result<Self> {
         let string = match &location {
             Location::Local(path) => {
+                log::debug!("loading toml file at: {}", path.display());
                 let mut file = File::open(path)?;
                 let mut buf = String::new();
                 file.read_to_string(&mut buf)?;
@@ -83,14 +84,14 @@ impl StatusDB {
 }
 
 impl ProjectStorage for StatusDB {
-    fn project_exists(&mut self, path: Path) -> Result<bool> {
+    fn project_exists(&mut self, path: ProjectDir) -> Result<bool> {
         self.ensure_project(&path)?;
         ensure!(path.len() == 1);
 
         return Ok(path.get_section(0).get_name() == self.project.project.name);
     }
 
-    fn task_exists(&mut self, path: Path) -> Result<bool> {
+    fn task_exists(&mut self, path: ProjectDir) -> Result<bool> {
         self.ensure_project(&path)?;
 
         let name = path.get_section(1).get_name();
@@ -100,19 +101,19 @@ impl ProjectStorage for StatusDB {
         return Ok(false);
     }
 
-    fn get_projects_path(&mut self) -> Result<Vec<Path>> {
-        return Ok(vec![Path {
+    fn get_projects_path(&mut self) -> Result<Vec<ProjectDir>> {
+        return Ok(vec![ProjectDir {
             vec: vec![crate::interface::PathSegment::project(
                 self.project.project.name.clone(),
             )],
         }]);
     }
 
-    fn promote_task(&mut self, _: crate::interface::Path) -> anyhow::Result<()> {
+    fn promote_task(&mut self, _: crate::interface::ProjectDir) -> anyhow::Result<()> {
         bail!("promoting not available for toml database");
     }
 
-    fn get_project(&mut self, path: crate::interface::Path) -> Result<crate::repr::Project> {
+    fn get_project(&mut self, path: crate::interface::ProjectDir) -> Result<crate::repr::Project> {
         self.ensure_project(&path)?;
 
         return Ok(crate::repr::Project {
@@ -146,7 +147,7 @@ impl ProjectStorage for StatusDB {
         });
     }
 
-    fn get_task(&mut self, path: crate::interface::Path) -> Result<crate::repr::Task> {
+    fn get_task(&mut self, path: crate::interface::ProjectDir) -> Result<crate::repr::Task> {
         ensure!(
             self.project.project.name == path.get_section(0).get_name(),
             "you can only get a name the root project name"
@@ -190,13 +191,13 @@ impl ProjectStorage for StatusDB {
         return Ok(());
     }
 
-    fn create_project(&mut self, _: Path, _: repr::Project, _: Location) -> Result<()> {
+    fn create_project(&mut self, _: ProjectDir, _: repr::Project, _: Location) -> Result<()> {
         bail!("Creating project not available for Basic TOML DB")
     }
 
     fn insert_task_done(
         &mut self,
-        path: crate::interface::Path,
+        path: crate::interface::ProjectDir,
         task: crate::repr::Task,
     ) -> Result<()> {
         self.ensure_project(&path)?;
@@ -213,7 +214,7 @@ impl ProjectStorage for StatusDB {
 
     fn insert_task_todo(
         &mut self,
-        path: crate::interface::Path,
+        path: crate::interface::ProjectDir,
         task: crate::repr::Task,
     ) -> Result<()> {
         self.ensure_project(&path)?;
@@ -227,7 +228,7 @@ impl ProjectStorage for StatusDB {
         );
         return Ok(());
     }
-    fn mark_done_task(&mut self, path: crate::interface::Path) -> Result<()> {
+    fn mark_done_task(&mut self, path: crate::interface::ProjectDir) -> Result<()> {
         self.ensure_project(&path)?;
         let name = path.get_section(1).get_name();
         let task = self.project.todo.remove(&name);
@@ -238,7 +239,7 @@ impl ProjectStorage for StatusDB {
         return Ok(());
     }
 
-    fn mark_todo_task(&mut self, path: crate::interface::Path) -> Result<()> {
+    fn mark_todo_task(&mut self, path: crate::interface::ProjectDir) -> Result<()> {
         self.ensure_project(&path)?;
         let name = path.get_section(1).get_name();
         let task = self.project.todo.remove(&name);
@@ -247,6 +248,14 @@ impl ProjectStorage for StatusDB {
         }
 
         return Ok(());
+    }
+    fn get_project_location(&mut self, path: ProjectDir) -> Result<Location> {
+        self.ensure_project(&path)?;
+        return Ok(self.location.clone());
+    }
+
+    fn delete_project(&mut self, _: ProjectDir) -> Result<()> {
+        todo!()
     }
 }
 
@@ -262,7 +271,7 @@ keeps track of all the status.toml databases
 */
 #[derive(Debug, Default)]
 pub struct StatusCluster {
-    instances: HashMap<Path, StatusInstance>,
+    instances: HashMap<ProjectDir, StatusInstance>,
     db_path: PathBuf,
 }
 
@@ -275,21 +284,21 @@ struct StatusClusterDB {
 use crate::repr;
 
 impl StatusCluster {
-    fn root_path(path: &Path) -> Result<Path> {
+    fn root_path(path: &ProjectDir) -> Result<ProjectDir> {
         ensure!(path.len() >= 1, "path must contain at least one segment");
         ensure!(
             !path.get_section(0).is_task(),
             "path root segment must be a project"
         );
 
-        Ok(Path {
+        Ok(ProjectDir {
             vec: vec![crate::interface::PathSegment::project(
                 path.get_section(0).get_name(),
             )],
         })
     }
 
-    fn path_to_string(path: &Path) -> Result<String> {
+    fn path_to_string(path: &ProjectDir) -> Result<String> {
         ensure!(path.len() >= 1, "path must contain at least one segment");
 
         let mut parts = Vec::with_capacity(path.len());
@@ -339,7 +348,7 @@ impl StatusCluster {
                 .map(|(path, instance)| {
                     (
                         // WARN: this is bad lmao
-                        Path::try_from(path.as_str()).unwrap(),
+                        ProjectDir::try_from(path.as_str()).unwrap(),
                         StatusInstance {
                             location: instance.clone(),
                             db: None,
@@ -350,7 +359,7 @@ impl StatusCluster {
         });
     }
 
-    fn get_instance_db(&mut self, path: &Path) -> Result<&mut StatusDB> {
+    fn get_instance_db(&mut self, path: &ProjectDir) -> Result<&mut StatusDB> {
         let root = Self::root_path(path)?;
         let instance = self
             .instances
@@ -366,18 +375,18 @@ impl StatusCluster {
 }
 
 impl ProjectStorage for StatusCluster {
-    fn project_exists(&mut self, path: Path) -> Result<bool> {
+    fn project_exists(&mut self, path: ProjectDir) -> Result<bool> {
         return Ok(self.get_instance_db(&path).is_ok());
     }
 
-    fn task_exists(&mut self, path: Path) -> Result<bool> {
+    fn task_exists(&mut self, path: ProjectDir) -> Result<bool> {
         let mut project_path = path.clone();
         project_path.remove_task()?;
 
         self.get_instance_db(&project_path)?.task_exists(path)
     }
 
-    fn get_projects_path(&mut self) -> Result<Vec<Path>> {
+    fn get_projects_path(&mut self) -> Result<Vec<ProjectDir>> {
         let mut projects = Vec::new();
 
         for path in self.instances.keys() {
@@ -391,15 +400,15 @@ impl ProjectStorage for StatusCluster {
         return Ok(projects);
     }
 
-    fn get_project(&mut self, path: Path) -> Result<repr::Project> {
+    fn get_project(&mut self, path: ProjectDir) -> Result<repr::Project> {
         self.get_instance_db(&path)?.get_project(path)
     }
 
-    fn promote_task(&mut self, path: Path) -> Result<()> {
+    fn promote_task(&mut self, path: ProjectDir) -> Result<()> {
         self.get_instance_db(&path)?.promote_task(path)
     }
 
-    fn get_task(&mut self, path: Path) -> Result<repr::Task> {
+    fn get_task(&mut self, path: ProjectDir) -> Result<repr::Task> {
         self.get_instance_db(&path)?.get_task(path)
     }
 
@@ -417,7 +426,7 @@ impl ProjectStorage for StatusCluster {
 
     fn create_project(
         &mut self,
-        path: Path,
+        path: ProjectDir,
         project: repr::Project,
         location: Location,
     ) -> Result<()> {
@@ -479,19 +488,32 @@ impl ProjectStorage for StatusCluster {
     }
 
     /* add todo task */
-    fn insert_task_todo(&mut self, path: Path, task: repr::Task) -> Result<()> {
+    fn insert_task_todo(&mut self, path: ProjectDir, task: repr::Task) -> Result<()> {
         log::debug!("inserting: {path}");
         self.get_instance_db(&path)?.insert_task_todo(path, task)
     }
-    fn insert_task_done(&mut self, path: Path, task: repr::Task) -> Result<()> {
+    fn insert_task_done(&mut self, path: ProjectDir, task: repr::Task) -> Result<()> {
         self.get_instance_db(&path)?.insert_task_done(path, task)
     }
     /* makes task as done */
-    fn mark_done_task(&mut self, path: Path) -> Result<()> {
+    fn mark_done_task(&mut self, path: ProjectDir) -> Result<()> {
         self.get_instance_db(&path)?.mark_done_task(path)
     }
     /* makes task as todo */
-    fn mark_todo_task(&mut self, path: Path) -> Result<()> {
+    fn mark_todo_task(&mut self, path: ProjectDir) -> Result<()> {
         self.get_instance_db(&path)?.mark_todo_task(path)
+    }
+
+    fn get_project_location(&mut self, path: ProjectDir) -> Result<Location> {
+        return self
+            .instances
+            .get(&path)
+            .ok_or(anyhow!("project not found"))
+            .and_then(|p| Ok(p.location.clone()));
+    }
+
+    fn delete_project(&mut self, path: ProjectDir) -> Result<()> {
+        self.instances.remove(&path);
+        return Ok(());
     }
 }

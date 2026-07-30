@@ -40,11 +40,11 @@ impl PathSegment {
 Path: (project_name/)+(task_name)?
 */
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Path {
+pub struct ProjectDir {
     pub vec: Vec<PathSegment>,
 }
 
-impl Display for Path {
+impl Display for ProjectDir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for segment in &self.vec {
             if !segment.is_task {
@@ -57,7 +57,7 @@ impl Display for Path {
     }
 }
 
-impl TryFrom<&str> for Path {
+impl TryFrom<&str> for ProjectDir {
     type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self> {
@@ -116,13 +116,13 @@ impl TryFrom<&str> for Path {
             vec.push(PathSegment::task(t.to_string()));
         }
 
-        return Ok(Path { vec });
+        return Ok(ProjectDir { vec });
     }
 }
 
-impl Path {
+impl ProjectDir {
     pub fn new() -> Self {
-        return Path { vec: Vec::new() };
+        return ProjectDir { vec: Vec::new() };
     }
 
     pub fn len(&self) -> usize {
@@ -130,7 +130,7 @@ impl Path {
     }
 
     pub fn parse<S: AsRef<str>>(s: S) -> Result<Self> {
-        return Path::try_from(s.as_ref());
+        return ProjectDir::try_from(s.as_ref());
     }
 
     pub fn add_task<S: Into<String>>(&mut self, name: S) -> Result<()> {
@@ -196,7 +196,7 @@ impl Path {
     }
 }
 
-impl Serialize for Path {
+impl Serialize for ProjectDir {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -206,47 +206,56 @@ impl Serialize for Path {
     }
 }
 
-impl<'de> Deserialize<'de> for Path {
+impl<'de> Deserialize<'de> for ProjectDir {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Path::parse(s).map_err(D::Error::custom)
+        ProjectDir::parse(s).map_err(D::Error::custom)
     }
 }
 
 pub trait ProjectStorage {
-    fn task_exists(&mut self, path: Path) -> Result<bool>;
-    fn project_exists(&mut self, path: Path) -> Result<bool>;
+    fn task_exists(&mut self, path: ProjectDir) -> Result<bool>;
+    fn project_exists(&mut self, path: ProjectDir) -> Result<bool>;
 
-    fn get_projects_path(&mut self) -> Result<Vec<Path>>;
-    fn get_project(&mut self, path: Path) -> Result<Project>;
-    fn promote_task(&mut self, path: Path) -> Result<()>;
-    fn get_task(&mut self, path: Path) -> Result<Task>;
+    fn get_projects_path(&mut self) -> Result<Vec<ProjectDir>>;
+    fn get_project(&mut self, path: ProjectDir) -> Result<Project>;
+    fn get_project_location(&mut self, path: ProjectDir) -> Result<Location>;
+    fn promote_task(&mut self, path: ProjectDir) -> Result<()>;
+    fn get_task(&mut self, path: ProjectDir) -> Result<Task>;
 
     /** saves data */
     fn commit_changes(&mut self) -> Result<()>;
 
     /** creates or overrides project data */
-    fn create_project(&mut self, path: Path, project: Project, location: Location) -> Result<()>;
+    fn create_project(
+        &mut self,
+        path: ProjectDir,
+        project: Project,
+        location: Location,
+    ) -> Result<()>;
     /** add todo task */
-    fn insert_task_todo(&mut self, path: Path, task: Task) -> Result<()>;
+    fn insert_task_todo(&mut self, path: ProjectDir, task: Task) -> Result<()>;
     /** add done task */
-    fn insert_task_done(&mut self, path: Path, task: Task) -> Result<()>;
+    fn insert_task_done(&mut self, path: ProjectDir, task: Task) -> Result<()>;
     /** marks task as done */
-    fn mark_done_task(&mut self, path: Path) -> Result<()>;
+    fn mark_done_task(&mut self, path: ProjectDir) -> Result<()>;
     /** marks task as todo */
-    fn mark_todo_task(&mut self, path: Path) -> Result<()>;
+    fn mark_todo_task(&mut self, path: ProjectDir) -> Result<()>;
+
+    /** marks task as todo */
+    fn delete_project(&mut self, path: ProjectDir) -> Result<()>;
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Path;
+    use super::ProjectDir;
 
     #[test]
     fn path_deserializes_from_string() {
-        let path: Path = serde_json::from_str("\"root/sub/task\"").expect("valid path");
+        let path: ProjectDir = serde_json::from_str("\"root/sub/task\"").expect("valid path");
         assert_eq!(
             path.vec[0].get_name(),
             "root",
@@ -270,7 +279,7 @@ mod tests {
 
     #[test]
     fn project_only_path_serializes_with_trailing_slash() {
-        let path = Path::parse("root/sub/").expect("valid project path");
+        let path = ProjectDir::parse("root/sub/").expect("valid project path");
         assert_eq!(
             path.vec[0].get_name(),
             "root",
