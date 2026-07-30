@@ -1,9 +1,9 @@
-# Project Manager
-It is an cli/tui utility that helps me keep track of my projects.
+# wiptool
 
-## Project status
-all tracked projects have an status.toml file in their root directory, it holds all the project info, and the features that are done or unfinished
-each feature an name, priority, difficutly, priority, and optionally a subfeature, and description.
+`wiptool` is a small CLI for keeping track of projects, tasks, and what is still in progress.
 
-## NOTE:
-make it so a project feature can only be done if other features/tasks are done!!
+Each tracked project has project metadata and task status stored separately from the global tracker index. The default local format uses a `status.toml` file for the project data.
+
+## Status files
+
+For local TOML storage, project data is written to `status.toml`. The tracker keeps its own index of where project data is stored and where the actual project lives.
