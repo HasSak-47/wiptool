@@ -12,23 +12,25 @@ use crate::{
 /**
 adds a task to a project
 */
-#[derive(Parser, Clone)]
+#[derive(Debug, Parser, Clone)]
 pub(crate) struct AddTask {
-    project: Option<String>,
     name: String,
     #[arg(short, long)]
-    todo: bool,
+    done: bool,
     difficulty: f64,
     priority: f64,
+
+    project: Option<String>,
 }
 
 impl AddTask {
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
+        log::debug!("{self:?}");
         let task = repr::Task {
             name: self.name.clone(),
             priority: self.priority,
             difficulty: self.difficulty,
-            todo: self.todo,
+            todo: !self.done,
         };
 
         let path = if let Some(project) = &self.project {

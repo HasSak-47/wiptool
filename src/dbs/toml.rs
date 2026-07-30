@@ -210,13 +210,23 @@ impl ProjectStorage for StatusDB {
     ) -> Result<()> {
         self.ensure_project(&path)?;
 
-        self.project.todo.insert(
-            task.name,
-            Task {
-                priority: task.priority,
-                difficulty: task.difficulty,
-            },
-        );
+        if task.todo {
+            self.project.todo.insert(
+                task.name,
+                Task {
+                    priority: task.priority,
+                    difficulty: task.difficulty,
+                },
+            );
+        } else {
+            self.project.done.insert(
+                task.name,
+                Task {
+                    priority: task.priority,
+                    difficulty: task.difficulty,
+                },
+            );
+        }
         return Ok(());
     }
 
