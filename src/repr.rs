@@ -18,12 +18,12 @@ pub struct Project {
     pub name: String,
     pub description: String,
     pub subprojects: Vec<Project>,
-    pub todo: Vec<Task>,
-    pub done: Vec<Task>,
+    pub tasks: Vec<Task>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Task {
+    pub todo: bool,
     pub name: String,
     pub priority: f64,
     pub difficulty: f64,
@@ -31,12 +31,20 @@ pub struct Task {
 
 impl Project {
     /* priority */
-    fn tasks_get_priority(tasks: &Vec<Task>) -> f64 {
+    fn tasks_get_priority(tasks: Vec<&Task>) -> f64 {
         tasks.iter().fold(0., |x, task| x + task.priority)
     }
 
+    pub fn get_todo_tasks(&self) -> Vec<&Task> {
+        self.tasks.iter().filter(|t| t.todo == true).collect()
+    }
+
+    pub fn get_done_tasks(&self) -> Vec<&Task> {
+        self.tasks.iter().filter(|t| t.todo == false).collect()
+    }
+
     pub fn get_priority(&self) -> f64 {
-        let mut total = Self::tasks_get_priority(&self.todo);
+        let mut total = Self::tasks_get_priority(self.get_todo_tasks());
 
         for project in &self.subprojects {
             total += project.get_priority();
@@ -46,12 +54,12 @@ impl Project {
     }
 
     /* difficulty */
-    fn tasks_get_difficulty(tasks: &Vec<Task>) -> f64 {
+    fn tasks_get_difficulty(tasks: Vec<&Task>) -> f64 {
         tasks.iter().fold(0., |x, task| x + task.difficulty)
     }
 
     pub fn get_done_difficulty(&self) -> f64 {
-        let mut done = Self::tasks_get_difficulty(&self.done);
+        let mut done = Self::tasks_get_difficulty(self.get_done_tasks());
 
         for project in &self.subprojects {
             done += project.get_done_difficulty();
@@ -61,7 +69,7 @@ impl Project {
     }
 
     pub fn get_todo_difficulty(&self) -> f64 {
-        let mut todo = Self::tasks_get_difficulty(&self.todo);
+        let mut todo = Self::tasks_get_difficulty(self.get_todo_tasks());
 
         for project in &self.subprojects {
             todo += project.get_todo_difficulty();
@@ -81,7 +89,7 @@ impl Project {
     pub fn get_difficulty(&self) -> f64 {
         let mut total = 0.;
 
-        for project in &self.todo {
+        for project in self.get_todo_tasks() {
             total += project.difficulty;
         }
 

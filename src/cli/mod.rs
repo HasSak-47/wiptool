@@ -100,8 +100,10 @@ pub fn run() -> Result<()> {
     match cli.command {
         Commands::List(l) => l.run(&opts, &mut storage)?,
         Commands::NewProject(new) => new.run(&opts, &mut storage)?,
-        Commands::AddTask(task) => task.run(&opts, &mut storage)?,
         Commands::DeleteProject(delete) => delete.run(&opts, &mut storage)?,
+        Commands::AddTask(task) => task.run(&opts, &mut storage)?,
+        Commands::RemoveTask(remove_task) => remove_task.run(&opts, &mut storage)?,
+        Commands::MarkTask(mark_task) => mark_task.run(&opts, &mut storage)?,
         _ => todo!("Todo"),
     }
 

@@ -9,6 +9,9 @@ use crate::{
     repr::{self, Location},
 };
 
+/**
+creates new project and status.toml
+*/
 #[derive(Parser, Clone)]
 pub(crate) struct NewProject {
     name: String,

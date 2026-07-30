@@ -238,17 +238,14 @@ pub trait ProjectStorage {
         storage_location: Location,
     ) -> Result<()>;
 
-    /** add todo task */
-    fn insert_task_todo(&mut self, path: ProjectDir, task: Task) -> Result<()>;
-    /** add done task */
-    fn insert_task_done(&mut self, path: ProjectDir, task: Task) -> Result<()>;
-    /** marks task as done */
-    fn mark_done_task(&mut self, path: ProjectDir) -> Result<()>;
-    /** marks task as todo */
-    fn mark_todo_task(&mut self, path: ProjectDir) -> Result<()>;
-
-    /** marks task as todo */
+    /** removes project */
     fn delete_project(&mut self, path: ProjectDir) -> Result<()>;
+
+    /** creates or overrides task data */
+    fn create_task(&mut self, path: ProjectDir, task: Task) -> Result<()>;
+
+    /** removes task*/
+    fn delete_task(&mut self, path: ProjectDir) -> Result<()>;
 }
 
 #[cfg(test)]

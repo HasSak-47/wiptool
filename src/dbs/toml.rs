@@ -124,25 +124,22 @@ impl ProjectStorage for StatusDB {
             name: self.project.project.name.clone(),
             description: self.project.project.description.clone(),
             subprojects: Vec::new(),
-            todo: self
+            tasks: self
                 .project
                 .todo
                 .iter()
                 .map(|(k, v)| crate::repr::Task {
                     name: k.clone(),
+                    todo: true,
                     priority: v.priority,
                     difficulty: v.difficulty,
                 })
-                .collect(),
-            done: self
-                .project
-                .done
-                .iter()
-                .map(|(k, v)| crate::repr::Task {
+                .chain(self.project.done.iter().map(|(k, v)| crate::repr::Task {
                     name: k.clone(),
+                    todo: false,
                     priority: v.priority,
                     difficulty: v.difficulty,
-                })
+                }))
                 .collect(),
         });
     }
@@ -162,19 +159,25 @@ impl ProjectStorage for StatusDB {
 
         let task_name = path.get_section(1).get_name();
 
-        let task = if self.project.todo.contains_key(&task_name) {
-            &self.project.todo[&task_name]
-        } else if self.project.done.contains_key(&task_name) {
-            &self.project.done[&task_name]
-        } else {
-            bail!("no exisiting task")
-        };
+        if let Some(task) = self.project.todo.get(&task_name) {
+            return Ok(crate::repr::Task {
+                name: task_name,
+                todo: true,
+                priority: task.priority,
+                difficulty: task.difficulty,
+            });
+        }
 
-        return Ok(crate::repr::Task {
-            name: task_name,
-            priority: task.priority,
-            difficulty: task.difficulty,
-        });
+        if let Some(task) = self.project.done.get(&task_name) {
+            return Ok(crate::repr::Task {
+                name: task_name,
+                priority: task.priority,
+                todo: false,
+                difficulty: task.difficulty,
+            });
+        }
+
+        bail!("no exisiting task")
     }
 
     fn commit_changes(&mut self) -> Result<()> {
@@ -200,24 +203,7 @@ impl ProjectStorage for StatusDB {
         Ok(self.storage_location.clone())
     }
 
-    fn insert_task_done(
-        &mut self,
-        path: crate::interface::ProjectDir,
-        task: crate::repr::Task,
-    ) -> Result<()> {
-        self.ensure_project(&path)?;
-
-        self.project.done.insert(
-            task.name,
-            Task {
-                priority: task.priority,
-                difficulty: task.difficulty,
-            },
-        );
-        return Ok(());
-    }
-
-    fn insert_task_todo(
+    fn create_task(
         &mut self,
         path: crate::interface::ProjectDir,
         task: crate::repr::Task,
@@ -233,26 +219,9 @@ impl ProjectStorage for StatusDB {
         );
         return Ok(());
     }
-    fn mark_done_task(&mut self, path: crate::interface::ProjectDir) -> Result<()> {
-        self.ensure_project(&path)?;
-        let name = path.get_section(1).get_name();
-        let task = self.project.todo.remove(&name);
-        if let Some(s) = task {
-            self.project.done.insert(name, s);
-        }
 
-        return Ok(());
-    }
-
-    fn mark_todo_task(&mut self, path: crate::interface::ProjectDir) -> Result<()> {
-        self.ensure_project(&path)?;
-        let name = path.get_section(1).get_name();
-        let task = self.project.todo.remove(&name);
-        if let Some(s) = task {
-            self.project.done.insert(name, s);
-        }
-
-        return Ok(());
+    fn delete_task(&mut self, _: ProjectDir) -> Result<()> {
+        todo!()
     }
 
     fn delete_project(&mut self, _: ProjectDir) -> Result<()> {
@@ -410,6 +379,8 @@ impl ProjectStorage for StatusCluster {
         }
 
         let project_location = project.location;
+        let todo_tasks = project.tasks.iter().filter(|task| task.todo);
+        let done_tasks = project.tasks.iter().filter(|task| task.todo);
         let db_project = Project {
             project: ProjectHeader {
                 version: project.version,
@@ -418,12 +389,10 @@ impl ProjectStorage for StatusCluster {
                 description: project.description,
                 subprojects: Vec::new(),
             },
-            todo: project
-                .todo
-                .into_iter()
+            todo: todo_tasks
                 .map(|task| {
                     (
-                        task.name,
+                        task.name.clone(),
                         Task {
                             priority: task.priority,
                             difficulty: task.difficulty,
@@ -431,12 +400,10 @@ impl ProjectStorage for StatusCluster {
                     )
                 })
                 .collect(),
-            done: project
-                .done
-                .into_iter()
+            done: done_tasks
                 .map(|task| {
                     (
-                        task.name,
+                        task.name.clone(),
                         Task {
                             priority: task.priority,
                             difficulty: task.difficulty,
@@ -464,25 +431,23 @@ impl ProjectStorage for StatusCluster {
         Ok(())
     }
 
-    /* add todo task */
-    fn insert_task_todo(&mut self, path: ProjectDir, task: repr::Task) -> Result<()> {
-        log::debug!("inserting: {path}");
-        self.get_instance_db(&path)?.insert_task_todo(path, task)
-    }
-    fn insert_task_done(&mut self, path: ProjectDir, task: repr::Task) -> Result<()> {
-        self.get_instance_db(&path)?.insert_task_done(path, task)
-    }
-    /* makes task as done */
-    fn mark_done_task(&mut self, path: ProjectDir) -> Result<()> {
-        self.get_instance_db(&path)?.mark_done_task(path)
-    }
-    /* makes task as todo */
-    fn mark_todo_task(&mut self, path: ProjectDir) -> Result<()> {
-        self.get_instance_db(&path)?.mark_todo_task(path)
+    fn create_task(
+        &mut self,
+        path: crate::interface::ProjectDir,
+        task: crate::repr::Task,
+    ) -> Result<()> {
+        self.get_instance_db(&path)?.create_task(path, task)?;
+
+        return Ok(());
     }
 
     fn delete_project(&mut self, path: ProjectDir) -> Result<()> {
         self.instances.remove(&path);
+        return Ok(());
+    }
+
+    fn delete_task(&mut self, path: ProjectDir) -> Result<()> {
+        self.get_instance_db(&path)?.delete_task(path)?;
         return Ok(());
     }
 }

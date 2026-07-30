@@ -7,6 +7,9 @@ use crate::{
     repr::Location,
 };
 
+/**
+removes a project from the tracker and optionaly keeps the status.toml
+*/
 #[derive(Parser, Clone)]
 pub(crate) struct DeleteProject {
     name: String,

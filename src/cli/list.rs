@@ -5,12 +5,18 @@ use clap::Parser;
 
 use crate::{cli::Opts, interface::ProjectStorage};
 
+/**
+list all the projects
+*/
 #[derive(Parser, Clone)]
 pub(crate) struct List {
     #[arg(short, long)]
     color: bool,
     #[arg(short, long)]
     location: bool,
+
+    #[arg(short, long)]
+    status: bool,
 }
 
 impl List {
