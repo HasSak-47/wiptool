@@ -2,7 +2,7 @@ use anyhow::*;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Version {
     // major.minor.patch(-pre)?(+build)?
     Semantic {

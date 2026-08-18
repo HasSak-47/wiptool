@@ -27,7 +27,6 @@ impl AddTask {
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
         log::debug!("{self:?}");
         let task = repr::Task {
-            name: self.name.clone(),
             priority: self.priority,
             difficulty: self.difficulty,
             todo: !self.done,

@@ -15,7 +15,10 @@ marks if the task todo is done or not
 #[derive(Parser, Clone)]
 pub(crate) struct MarkTask {
     name: String,
+
+    #[arg(short, long)]
     done: bool,
+
     project: Option<String>,
 }
 

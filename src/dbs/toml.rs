@@ -1,6 +1,6 @@
 use crate::{
     interface::{ProjectDir, ProjectStorage},
-    repr::Location,
+    repr::{Location, Status},
     version::Version,
 };
 
@@ -16,9 +16,14 @@ use std::{
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct ProjectHeader {
-    pub version: Option<Version>,
-    pub edition: Version,
     pub name: String,
+    pub edition: Version,
+
+    pub milestone: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kinds: Vec<String>,
+
     pub description: String,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -32,14 +37,23 @@ pub struct Task {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Project {
-    pub project: ProjectHeader,
+pub struct Milestone {
+    pub name: String,
+    pub status: Status,
+    pub version: Option<Version>,
 
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub todo: HashMap<String, Task>,
 
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub done: HashMap<String, Task>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Project {
+    pub project: ProjectHeader,
+
+    pub milestones: Vec<Milestone>,
 }
 
 /**
@@ -53,6 +67,8 @@ pub struct StatusDB {
 }
 
 impl StatusDB {
+    const DEFAULT_MILESTONE: &'static str = "default";
+
     pub fn ensure_project(&self, path: &ProjectDir) -> Result<()> {
         ensure!(
             self.project.project.name == path.get_section(0).get_name(),
@@ -81,6 +97,87 @@ impl StatusDB {
             storage_location,
         });
     }
+
+    fn current_milestone_name(&self) -> String {
+        self.project
+            .project
+            .milestone
+            .clone()
+            .or_else(|| self.project.milestones.first().map(|m| m.name.clone()))
+            .unwrap_or_else(|| Self::DEFAULT_MILESTONE.to_string())
+    }
+
+    fn path_milestone_and_task(&self, path: &ProjectDir) -> Result<(String, Option<String>)> {
+        self.ensure_project(path)?;
+
+        if path.len() == 1 {
+            return Ok((self.current_milestone_name(), None));
+        }
+
+        let mut idx = 1;
+        let milestone = if path.get_section(idx).is_milestone() {
+            let milestone = path.get_section(idx).get_name();
+            idx += 1;
+            milestone
+        } else {
+            self.current_milestone_name()
+        };
+
+        if idx == path.len() {
+            return Ok((milestone, None));
+        }
+
+        ensure!(
+            path.get_section(idx).is_task(),
+            "subprojects are not handled by the basic TOML database yet"
+        );
+        ensure!(
+            idx + 1 == path.len(),
+            "task segment can only appear at the end"
+        );
+
+        Ok((milestone, Some(path.get_section(idx).get_name())))
+    }
+
+    fn milestone(&self, name: &str) -> Result<&Milestone> {
+        self.project
+            .milestones
+            .iter()
+            .find(|milestone| milestone.name == name)
+            .ok_or_else(|| anyhow!("milestone not found: {name}"))
+    }
+
+    fn milestone_mut(&mut self, name: &str) -> Result<&mut Milestone> {
+        self.project
+            .milestones
+            .iter_mut()
+            .find(|milestone| milestone.name == name)
+            .ok_or_else(|| anyhow!("milestone not found: {name}"))
+    }
+
+    fn ensure_milestone_mut(&mut self, name: &str) -> &mut Milestone {
+        if let Some(idx) = self
+            .project
+            .milestones
+            .iter()
+            .position(|milestone| milestone.name == name)
+        {
+            return &mut self.project.milestones[idx];
+        }
+
+        self.project.milestones.push(Milestone {
+            name: name.to_string(),
+            status: Status::default(),
+            version: None,
+            todo: HashMap::new(),
+            done: HashMap::new(),
+        });
+
+        self.project
+            .milestones
+            .last_mut()
+            .expect("milestone inserted above")
+    }
 }
 
 impl ProjectStorage for StatusDB {
@@ -92,13 +189,11 @@ impl ProjectStorage for StatusDB {
     }
 
     fn task_exists(&mut self, path: ProjectDir) -> Result<bool> {
-        self.ensure_project(&path)?;
+        let (milestone_name, task_name) = self.path_milestone_and_task(&path)?;
+        let task_name = task_name.ok_or_else(|| anyhow!("path does not point to a task"))?;
+        let milestone = self.milestone(&milestone_name)?;
 
-        let name = path.get_section(1).get_name();
-        if self.project.todo.contains_key(&name) || self.project.todo.contains_key(&name) {
-            return Ok(true);
-        }
-        return Ok(false);
+        Ok(milestone.todo.contains_key(&task_name) || milestone.done.contains_key(&task_name))
     }
 
     fn get_projects_path(&mut self) -> Result<Vec<ProjectDir>> {
@@ -116,61 +211,75 @@ impl ProjectStorage for StatusDB {
     fn get_project(&mut self, path: crate::interface::ProjectDir) -> Result<crate::repr::Project> {
         self.ensure_project(&path)?;
 
-        return Ok(crate::repr::Project {
-            version: self.project.project.version.clone(),
-            edition: self.project.project.edition.clone(),
+        let current_milestone = self.current_milestone_name();
+        let mut milestones = HashMap::new();
+        let mut milestone_statuses = HashMap::new();
 
-            location: None,
-            name: self.project.project.name.clone(),
-            description: self.project.project.description.clone(),
-            subprojects: Vec::new(),
-            tasks: self
-                .project
+        for milestone in &self.project.milestones {
+            let tasks = milestone
                 .todo
                 .iter()
-                .map(|(k, v)| crate::repr::Task {
-                    name: k.clone(),
-                    todo: true,
-                    priority: v.priority,
-                    difficulty: v.difficulty,
+                .map(|(name, task)| {
+                    (
+                        name.clone(),
+                        crate::repr::Task {
+                            todo: true,
+                            priority: task.priority,
+                            difficulty: task.difficulty,
+                        },
+                    )
                 })
-                .chain(self.project.done.iter().map(|(k, v)| crate::repr::Task {
-                    name: k.clone(),
-                    todo: false,
-                    priority: v.priority,
-                    difficulty: v.difficulty,
+                .chain(milestone.done.iter().map(|(name, task)| {
+                    (
+                        name.clone(),
+                        crate::repr::Task {
+                            todo: false,
+                            priority: task.priority,
+                            difficulty: task.difficulty,
+                        },
+                    )
                 }))
-                .collect(),
+                .collect();
+
+            milestone_statuses.insert(milestone.name.clone(), milestone.status.clone());
+            milestones.insert(
+                milestone.name.clone(),
+                crate::repr::Milestone {
+                    status: milestone.status.clone(),
+                    version: milestone.version.clone(),
+                    tasks,
+                },
+            );
+        }
+
+        return Ok(crate::repr::Project {
+            name: self.project.project.name.clone(),
+            edition: self.project.project.edition.clone(),
+            current_milestone,
+            miliestones: milestone_statuses,
+            kinds: self.project.project.kinds.clone(),
+            description: self.project.project.description.clone(),
+            location: None,
+            subprojects: HashMap::new(),
+            milestones,
         });
     }
 
     fn get_task(&mut self, path: crate::interface::ProjectDir) -> Result<crate::repr::Task> {
-        ensure!(
-            self.project.project.name == path.get_section(0).get_name(),
-            "you can only get a name the root project name"
-        );
+        let (milestone_name, task_name) = self.path_milestone_and_task(&path)?;
+        let task_name = task_name.ok_or_else(|| anyhow!("path does not point to a task"))?;
+        let milestone = self.milestone(&milestone_name)?;
 
-        ensure!(path.len() == 2, "subprojects are not handled yet...");
-
-        ensure!(
-            path.get_section(1).is_task(),
-            "you can only get a name the root project name"
-        );
-
-        let task_name = path.get_section(1).get_name();
-
-        if let Some(task) = self.project.todo.get(&task_name) {
+        if let Some(task) = milestone.todo.get(&task_name) {
             return Ok(crate::repr::Task {
-                name: task_name,
                 todo: true,
                 priority: task.priority,
                 difficulty: task.difficulty,
             });
         }
 
-        if let Some(task) = self.project.done.get(&task_name) {
+        if let Some(task) = milestone.done.get(&task_name) {
             return Ok(crate::repr::Task {
-                name: task_name,
                 priority: task.priority,
                 todo: false,
                 difficulty: task.difficulty,
@@ -208,19 +317,23 @@ impl ProjectStorage for StatusDB {
         path: crate::interface::ProjectDir,
         task: crate::repr::Task,
     ) -> Result<()> {
-        self.ensure_project(&path)?;
+        let (milestone_name, task_name) = self.path_milestone_and_task(&path)?;
+        let task_name = task_name.ok_or_else(|| anyhow!("path does not point to a task"))?;
+        let milestone = self.ensure_milestone_mut(&milestone_name);
 
         if task.todo {
-            self.project.todo.insert(
-                task.name,
+            milestone.done.remove(&task_name);
+            milestone.todo.insert(
+                task_name,
                 Task {
                     priority: task.priority,
                     difficulty: task.difficulty,
                 },
             );
         } else {
-            self.project.done.insert(
-                task.name,
+            milestone.todo.remove(&task_name);
+            milestone.done.insert(
+                task_name,
                 Task {
                     priority: task.priority,
                     difficulty: task.difficulty,
@@ -230,8 +343,16 @@ impl ProjectStorage for StatusDB {
         return Ok(());
     }
 
-    fn delete_task(&mut self, _: ProjectDir) -> Result<()> {
-        todo!()
+    fn delete_task(&mut self, path: ProjectDir) -> Result<()> {
+        let (milestone_name, task_name) = self.path_milestone_and_task(&path)?;
+        let task_name = task_name.ok_or_else(|| anyhow!("path does not point to a task"))?;
+        let milestone = self.milestone_mut(&milestone_name)?;
+
+        let removed = milestone.todo.remove(&task_name).is_some()
+            || milestone.done.remove(&task_name).is_some();
+        ensure!(removed, "task not found: {task_name}");
+
+        Ok(())
     }
 
     fn delete_project(&mut self, _: ProjectDir) -> Result<()> {
@@ -389,38 +510,67 @@ impl ProjectStorage for StatusCluster {
         }
 
         let project_location = project.location;
-        let todo_tasks = project.tasks.iter().filter(|task| task.todo);
-        let done_tasks = project.tasks.iter().filter(|task| task.todo);
+        let current_milestone = if project.current_milestone.is_empty() {
+            project
+                .milestones
+                .keys()
+                .next()
+                .cloned()
+                .unwrap_or_else(|| StatusDB::DEFAULT_MILESTONE.to_string())
+        } else {
+            project.current_milestone.clone()
+        };
+
+        let mut milestones: Vec<Milestone> = project
+            .milestones
+            .into_iter()
+            .map(|(name, milestone)| {
+                let mut todo = HashMap::new();
+                let mut done = HashMap::new();
+
+                for (task_name, task) in milestone.tasks {
+                    let db_task = Task {
+                        priority: task.priority,
+                        difficulty: task.difficulty,
+                    };
+
+                    if task.todo {
+                        todo.insert(task_name, db_task);
+                    } else {
+                        done.insert(task_name, db_task);
+                    }
+                }
+
+                Milestone {
+                    name,
+                    status: milestone.status,
+                    version: milestone.version,
+                    todo,
+                    done,
+                }
+            })
+            .collect();
+
+        if milestones.is_empty() {
+            milestones.push(Milestone {
+                name: current_milestone.clone(),
+                status: Status::default(),
+                version: None,
+                todo: HashMap::new(),
+                done: HashMap::new(),
+            });
+        }
+
         let db_project = Project {
             project: ProjectHeader {
-                version: project.version,
+                milestone: Some(current_milestone),
                 edition: project.edition,
                 name: project.name,
+                kinds: project.kinds,
                 description: project.description,
                 subprojects: Vec::new(),
             },
-            todo: todo_tasks
-                .map(|task| {
-                    (
-                        task.name.clone(),
-                        Task {
-                            priority: task.priority,
-                            difficulty: task.difficulty,
-                        },
-                    )
-                })
-                .collect(),
-            done: done_tasks
-                .map(|task| {
-                    (
-                        task.name.clone(),
-                        Task {
-                            priority: task.priority,
-                            difficulty: task.difficulty,
-                        },
-                    )
-                })
-                .collect(),
+            milestones,
         };
 
         let mut db = StatusDB {

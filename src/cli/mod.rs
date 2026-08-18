@@ -1,4 +1,5 @@
 mod add_task;
+mod completion;
 mod delete_project;
 mod init_project;
 mod list;
@@ -16,9 +17,9 @@ use clap::{Args, Parser, Subcommand};
 use crate::interface::ProjectStorage;
 
 use self::{
-    add_task::AddTask, delete_project::DeleteProject, init_project::InitProject, list::List,
-    mark_task::MarkTask, new_project::NewProject, promote_task::PromoteTask,
-    remove_task::RemoveTask, set_subproject::SetSubproject,
+    add_task::AddTask, completion::Completion, delete_project::DeleteProject,
+    init_project::InitProject, list::List, mark_task::MarkTask, new_project::NewProject,
+    promote_task::PromoteTask, remove_task::RemoveTask, set_subproject::SetSubproject,
 };
 
 #[derive(Parser, Clone)]
@@ -34,7 +35,7 @@ struct Cli {
 #[allow(dead_code)]
 fn data_dir() -> PathBuf {
     let mut d = dirs::data_dir().unwrap();
-    d.push("project_manager");
+    d.push("wiptool");
 
     d
 }
@@ -62,6 +63,7 @@ enum Commands {
     PromoteTask(PromoteTask),
     MarkTask(MarkTask),
     List(List),
+    Completion(Completion),
 }
 
 pub fn run() -> Result<()> {
@@ -79,6 +81,11 @@ pub fn run() -> Result<()> {
         log::debug!("running on warn by opts");
     }
     log::debug!("running on debug mode");
+
+    if let Commands::Completion(completion) = &cli.command {
+        completion.run();
+        return Ok(());
+    }
 
     if let Err(e) = std::fs::create_dir(&opts.db_path) {
         match e.kind() {
@@ -104,6 +111,7 @@ pub fn run() -> Result<()> {
         Commands::AddTask(task) => task.run(&opts, &mut storage)?,
         Commands::RemoveTask(remove_task) => remove_task.run(&opts, &mut storage)?,
         Commands::MarkTask(mark_task) => mark_task.run(&opts, &mut storage)?,
+        Commands::Completion(_) => unreachable!("completion exits before storage initialization"),
         _ => todo!("Todo"),
     }
 

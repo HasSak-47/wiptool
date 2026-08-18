@@ -1,9 +1,21 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
-use crate::{cli::Opts, interface::ProjectStorage};
+use crate::{
+    cli::Opts,
+    interface::ProjectStorage,
+    repr::{Project, Status},
+};
+
+#[derive(ValueEnum, Default, Clone, Debug)]
+enum SortBy {
+    #[default]
+    Name,
+    Completion,
+    Category,
+}
 
 /**
 list all the projects
@@ -12,72 +24,109 @@ list all the projects
 pub(crate) struct List {
     #[arg(short, long)]
     color: bool,
+
     #[arg(short, long)]
     location: bool,
 
     #[arg(short, long)]
-    status: bool,
+    state: bool,
+
+    #[arg(long, value_delimiter = ',', default_value = "")]
+    sort_by: Vec<SortBy>,
+
+    #[arg(long, value_delimiter = ',', default_value = "")]
+    kinds: Vec<String>,
+
+    #[arg(long)]
+    status: Option<Status>,
+
+    #[arg(long, conflicts_with = "status")]
+    exact_status: Option<Status>,
 }
 
 impl List {
+    fn generate_state_string(project: &Project) -> String {
+        let done_difficulty = project.get_done_difficulty();
+        let todo_difficulty = project.get_todo_difficulty();
+        let overall_difficulty = done_difficulty + todo_difficulty;
+        let completion = if overall_difficulty == 0. {
+            1.
+        } else {
+            done_difficulty / overall_difficulty
+        };
+
+        return format!(
+            "completion: {:.1}% | dif: {overall_difficulty:.2} | todo dif: {todo_difficulty:.2}",
+            completion * 100.
+        );
+    }
+
+    fn generate_location_string(project: &Project, home_dir: &Option<PathBuf>) -> String {
+        return format!(
+            "\x1b[1;34m{}\x1b[0m",
+            match &project.location {
+                Some(crate::repr::Location::Local(project_location)) => {
+                    let display_location = if let Some(home) = &home_dir {
+                        match project_location.strip_prefix(home) {
+                            Ok(relative) => {
+                                if relative.as_os_str().is_empty() {
+                                    String::from("~")
+                                } else {
+                                    PathBuf::from("~").join(relative).display().to_string()
+                                }
+                            }
+                            Err(_) => project_location.display().to_string(),
+                        }
+                    } else {
+                        project_location.display().to_string()
+                    };
+                    format!("{display_location}")
+                }
+                Some(crate::repr::Location::URL(project_location)) => {
+                    format!("{project_location}")
+                }
+                None => {
+                    format!("<unknown>")
+                }
+            }
+        );
+    }
+
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
         let paths = storage.get_projects_path()?;
         let home_dir = dirs::home_dir();
 
-        for path in paths {
+        let projects = paths.iter().filter_map(|path| {
             log::debug!("getting path: {path:?}",);
-            let project = storage.get_project(path.clone())?;
+            let project = storage.get_project(path.to_owned().to_owned()).ok()?;
+            let project_status = &project
+                .milestones
+                .get(&project.current_milestone)
+                .unwrap()
+                .status;
 
-            let status_string = || {
-                let done_difficulty = project.get_done_difficulty();
-                let todo_difficulty = project.get_todo_difficulty();
-                let overall_difficulty = done_difficulty + todo_difficulty;
-                let completion = if overall_difficulty == 0. {
-                    1.
-                } else {
-                    done_difficulty / overall_difficulty
-                };
+            if let Some(s) = &self.exact_status {
+                if *s != *project_status {
+                    return None;
+                }
+            }
 
-                format!("completion: {:.1}% | difficulty: {overall_difficulty:.2} | todo difficulty: {todo_difficulty}", completion * 100.)
-            };
+            if let Some(s) = &self.status {
+                if !project_status.aproximate(s) {
+                    return None;
+                }
+            }
 
-            let location_string = || {
-                format!(
-                    "\x1b[1;34m{}\x1b[0m",
-                    match &project.location {
-                        Some(crate::repr::Location::Local(project_location)) => {
-                            let display_location = if let Some(home) = &home_dir {
-                                match project_location.strip_prefix(home) {
-                                    Ok(relative) => {
-                                        if relative.as_os_str().is_empty() {
-                                            String::from("~")
-                                        } else {
-                                            PathBuf::from("~").join(relative).display().to_string()
-                                        }
-                                    }
-                                    Err(_) => project_location.display().to_string(),
-                                }
-                            } else {
-                                project_location.display().to_string()
-                            };
-                            format!("{display_location}")
-                        }
-                        Some(crate::repr::Location::URL(project_location)) => {
-                            format!("{project_location}")
-                        }
-                        None => {
-                            format!("<unknown>")
-                        }
-                    }
-                )
-            };
+            return Some((path, project));
+        });
 
+        for (path, project) in projects {
             print!("{path}");
             if self.location {
-                print!(" @ {}", location_string());
+                print!(" @ {}", List::generate_location_string(&project, &home_dir));
             }
-            if self.status {
-                print!(" | {}", status_string());
+            if self.state {
+                print!(" | {}", List::generate_state_string(&project));
             }
             println!()
         }

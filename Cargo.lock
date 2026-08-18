@@ -177,6 +177,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3be2ad0423bdbbb0e25bc89add796f3559706d4a95e1bc98e4d9662a957b6a19"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.5.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -513,25 +522,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "535d180e0ecab6268a3e718bb9fd44db66bbbc256257165fc699dadf70d16fe7"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "project_manager_api"
-version = "0.5.1"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "dirs",
- "env_logger",
- "fluent-uri",
- "log",
- "rand",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "toml",
 ]
 
 [[package]]
@@ -955,6 +945,26 @@ name = "winnow"
 version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
+
+[[package]]
+name = "wiptool"
+version = "0.5.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "dirs",
+ "env_logger",
+ "fluent-uri",
+ "log",
+ "rand",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "toml",
+]
 
 [[package]]
 name = "zerocopy"

@@ -16,30 +16,53 @@ creates new project and status.toml
 pub(crate) struct NewProject {
     name: String,
 
-    #[arg(short, long, default_value_os_t = current_dir().unwrap())]
-    location: PathBuf,
+    #[arg(short = 'l', long = "location", alias = "project-location", default_value_os_t = current_dir().unwrap())]
+    project_location: PathBuf,
+
+    #[arg(short = 's', long = "storage-location")]
+    storage_location: Option<PathBuf>,
+
+    #[arg(long = "storage-in-data-dir", conflicts_with = "storage_location")]
+    storage_in_data_dir: bool,
 }
 
 impl NewProject {
-    pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
+    pub fn run(&self, opts: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
         let mut path = ProjectDir::new();
         path.add_project(self.name.clone())?;
 
         let mut project = repr::Project::default();
         project.name = self.name.clone();
-        project.location = Some(Location::Local(self.location.clone()));
+        project.location = Some(Location::Local(self.project_location.clone()));
 
-        let mut db_location = self.location.clone();
-
-        db_location.push("status");
-        db_location.set_extension("toml");
+        let db_location = if self.storage_in_data_dir {
+            let data_dir = opts
+                .db_path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("db path has no parent directory"))?;
+            data_dir.join(format!("{}.toml", self.name))
+        } else if let Some(storage_location) = &self.storage_location {
+            storage_location.clone()
+        } else {
+            let mut db_location = self.project_location.clone();
+            db_location.push("status");
+            db_location.set_extension("toml");
+            db_location
+        };
 
         if std::fs::exists(&db_location)? {
             bail!("project at {} already exists", db_location.display());
         }
 
-        storage.create_project(path, project, repr::Location::Local(db_location))?;
-        storage.commit_changes()?;
+        storage
+            .create_project(path, project, repr::Location::Local(db_location.clone()))
+            .expect(&format!(
+                "failed to create project to: {}",
+                db_location.display()
+            ));
+        storage
+            .commit_changes()
+            .expect(&format!("failed to commit to: {}", db_location.display()));
 
         Ok(())
     }
@@ -69,6 +92,7 @@ mod tests {
         let project_dir = root.join("project");
         let db_dir = root.join("db");
         let db_path = db_dir.join("projects.toml");
+        let status_path = root.join("project-state.toml");
 
         std::fs::create_dir_all(&project_dir).expect("create project dir");
         std::fs::create_dir_all(&db_dir).expect("create db dir");
@@ -83,13 +107,14 @@ mod tests {
 
         NewProject {
             name: "sample".to_string(),
-            location: project_dir.clone(),
+            project_location: project_dir.clone(),
+            storage_location: Some(status_path.clone()),
+            storage_in_data_dir: false,
         }
         .run(&opts, &mut storage)
         .expect("create project");
 
         let project_path = ProjectDir::parse("sample/").expect("valid project path");
-        let status_path = project_dir.join("status.toml");
 
         assert_eq!(
             storage
@@ -105,9 +130,50 @@ mod tests {
             Location::Local(status_path)
         );
 
-        let status_toml =
-            std::fs::read_to_string(project_dir.join("status.toml")).expect("read status toml");
+        let status_toml = std::fs::read_to_string(root.join("project-state.toml"))
+            .expect("read custom status toml");
         assert!(!status_toml.contains("location"));
+
+        std::fs::remove_dir_all(root).expect("cleanup test dir");
+    }
+
+    #[test]
+    fn new_project_can_store_status_in_data_dir_with_project_name() {
+        let root = test_dir("data_dir_storage");
+        let project_dir = root.join("project");
+        let db_dir = root.join("db");
+        let db_path = db_dir.join("projects.toml");
+        let status_path = db_dir.join("sample.toml");
+
+        std::fs::create_dir_all(&project_dir).expect("create project dir");
+        std::fs::create_dir_all(&db_dir).expect("create db dir");
+        File::create(&db_path).expect("create cluster db");
+
+        let opts = Opts {
+            db_path,
+            ..Opts::default()
+        };
+        let cluster = StatusCluster::load(&opts.db_path).expect("load empty cluster db");
+        let mut storage: Box<dyn ProjectStorage> = Box::new(cluster);
+
+        NewProject {
+            name: "sample".to_string(),
+            project_location: project_dir.clone(),
+            storage_location: None,
+            storage_in_data_dir: true,
+        }
+        .run(&opts, &mut storage)
+        .expect("create project");
+
+        let project_path = ProjectDir::parse("sample/").expect("valid project path");
+
+        assert_eq!(
+            storage
+                .get_storage_location(project_path)
+                .expect("get storage location"),
+            Location::Local(status_path.clone())
+        );
+        assert!(status_path.exists(), "status file was not created");
 
         std::fs::remove_dir_all(root).expect("cleanup test dir");
     }
