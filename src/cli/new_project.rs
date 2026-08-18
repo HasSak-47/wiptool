@@ -22,8 +22,12 @@ pub(crate) struct NewProject {
     #[arg(short = 's', long = "storage-location")]
     storage_location: Option<PathBuf>,
 
-    #[arg(long = "storage-in-data-dir", conflicts_with = "storage_location")]
-    storage_in_data_dir: bool,
+    #[arg(
+        short = 'S',
+        long = "storage-in-data",
+        conflicts_with = "storage-location"
+    )]
+    storage_in_data: bool,
 }
 
 impl NewProject {
@@ -35,7 +39,7 @@ impl NewProject {
         project.name = self.name.clone();
         project.location = Some(Location::Local(self.project_location.clone()));
 
-        let db_location = if self.storage_in_data_dir {
+        let db_location = if self.storage_in_data {
             let data_dir = opts
                 .db_path
                 .parent()
@@ -72,6 +76,7 @@ impl NewProject {
 mod tests {
     use super::*;
     use crate::dbs::toml::StatusCluster;
+    use crate::repr::{Milestone, Status};
     use std::{
         fs::File,
         time::{SystemTime, UNIX_EPOCH},
@@ -109,7 +114,7 @@ mod tests {
             name: "sample".to_string(),
             project_location: project_dir.clone(),
             storage_location: Some(status_path.clone()),
-            storage_in_data_dir: false,
+            storage_in_data: false,
         }
         .run(&opts, &mut storage)
         .expect("create project");
@@ -160,7 +165,7 @@ mod tests {
             name: "sample".to_string(),
             project_location: project_dir.clone(),
             storage_location: None,
-            storage_in_data_dir: true,
+            storage_in_data: true,
         }
         .run(&opts, &mut storage)
         .expect("create project");
@@ -174,6 +179,80 @@ mod tests {
             Location::Local(status_path.clone())
         );
         assert!(status_path.exists(), "status file was not created");
+
+        std::fs::remove_dir_all(root).expect("cleanup test dir");
+    }
+
+    #[test]
+    fn storage_can_add_and_update_milestones() {
+        let root = test_dir("milestones");
+        let project_dir = root.join("project");
+        let db_dir = root.join("db");
+        let db_path = db_dir.join("projects.toml");
+
+        std::fs::create_dir_all(&project_dir).expect("create project dir");
+        std::fs::create_dir_all(&db_dir).expect("create db dir");
+        File::create(&db_path).expect("create cluster db");
+
+        let opts = Opts {
+            db_path,
+            ..Opts::default()
+        };
+        let cluster = StatusCluster::load(&opts.db_path).expect("load empty cluster db");
+        let mut storage: Box<dyn ProjectStorage> = Box::new(cluster);
+
+        NewProject {
+            name: "sample".to_string(),
+            project_location: project_dir.clone(),
+            storage_location: None,
+            storage_in_data: false,
+        }
+        .run(&opts, &mut storage)
+        .expect("create project");
+
+        let project_path = ProjectDir::parse("sample/").expect("valid project path");
+        let milestone_path = ProjectDir::parse("sample/@v1/").expect("valid milestone path");
+
+        storage
+            .create_milestone(
+                milestone_path.clone(),
+                Milestone {
+                    status: Status::default(),
+                    version: None,
+                    tasks: Default::default(),
+                },
+            )
+            .expect("create milestone");
+        storage
+            .set_current_milestone(project_path.clone(), "v1".to_string())
+            .expect("set current milestone");
+        storage
+            .set_status(
+                milestone_path,
+                "in-progress.active".parse().expect("valid status"),
+            )
+            .expect("set status");
+
+        let project = storage
+            .get_project(project_path.clone())
+            .expect("get project");
+        assert_eq!(project.current_milestone, "v1");
+        assert_eq!(
+            project
+                .milestones
+                .get("v1")
+                .expect("milestone exists")
+                .status
+                .to_string(),
+            "in-progress.active"
+        );
+        assert_eq!(
+            storage
+                .get_milestones(project_path)
+                .expect("get milestones")
+                .len(),
+            2
+        );
 
         std::fs::remove_dir_all(root).expect("cleanup test dir");
     }

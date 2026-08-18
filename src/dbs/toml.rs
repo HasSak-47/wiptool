@@ -213,7 +213,6 @@ impl ProjectStorage for StatusDB {
 
         let current_milestone = self.current_milestone_name();
         let mut milestones = HashMap::new();
-        let mut milestone_statuses = HashMap::new();
 
         for milestone in &self.project.milestones {
             let tasks = milestone
@@ -241,7 +240,6 @@ impl ProjectStorage for StatusDB {
                 }))
                 .collect();
 
-            milestone_statuses.insert(milestone.name.clone(), milestone.status.clone());
             milestones.insert(
                 milestone.name.clone(),
                 crate::repr::Milestone {
@@ -256,7 +254,6 @@ impl ProjectStorage for StatusDB {
             name: self.project.project.name.clone(),
             edition: self.project.project.edition.clone(),
             current_milestone,
-            miliestones: milestone_statuses,
             kinds: self.project.project.kinds.clone(),
             description: self.project.project.description.clone(),
             location: None,
@@ -287,6 +284,128 @@ impl ProjectStorage for StatusDB {
         }
 
         bail!("no exisiting task")
+    }
+
+    fn create_milestone(
+        &mut self,
+        path: ProjectDir,
+        milestone: crate::repr::Milestone,
+    ) -> Result<()> {
+        let (milestone_name, task_name) = self.path_milestone_and_task(&path)?;
+        ensure!(
+            task_name.is_none(),
+            "path must point to a milestone or project"
+        );
+        ensure!(
+            !self
+                .project
+                .milestones
+                .iter()
+                .any(|existing| existing.name == milestone_name),
+            "milestone already exists: {milestone_name}"
+        );
+
+        let mut todo = HashMap::new();
+        let mut done = HashMap::new();
+        for (task_name, task) in milestone.tasks {
+            let db_task = Task {
+                priority: task.priority,
+                difficulty: task.difficulty,
+            };
+            if task.todo {
+                todo.insert(task_name, db_task);
+            } else {
+                done.insert(task_name, db_task);
+            }
+        }
+
+        self.project.milestones.push(Milestone {
+            name: milestone_name.clone(),
+            status: milestone.status,
+            version: milestone.version,
+            todo,
+            done,
+        });
+
+        if self.project.project.milestone.is_none() {
+            self.project.project.milestone = Some(milestone_name);
+        }
+
+        Ok(())
+    }
+
+    fn get_milestones(
+        &mut self,
+        path: ProjectDir,
+    ) -> Result<Vec<(String, crate::repr::Milestone)>> {
+        self.ensure_project(&path)?;
+        ensure!(
+            path.len() == 1,
+            "listing milestones for subprojects is not handled yet"
+        );
+
+        Ok(self
+            .project
+            .milestones
+            .iter()
+            .map(|milestone| {
+                let tasks = milestone
+                    .todo
+                    .iter()
+                    .map(|(name, task)| {
+                        (
+                            name.clone(),
+                            crate::repr::Task {
+                                todo: true,
+                                priority: task.priority,
+                                difficulty: task.difficulty,
+                            },
+                        )
+                    })
+                    .chain(milestone.done.iter().map(|(name, task)| {
+                        (
+                            name.clone(),
+                            crate::repr::Task {
+                                todo: false,
+                                priority: task.priority,
+                                difficulty: task.difficulty,
+                            },
+                        )
+                    }))
+                    .collect();
+
+                (
+                    milestone.name.clone(),
+                    crate::repr::Milestone {
+                        status: milestone.status.clone(),
+                        version: milestone.version.clone(),
+                        tasks,
+                    },
+                )
+            })
+            .collect())
+    }
+
+    fn set_current_milestone(&mut self, path: ProjectDir, milestone: String) -> Result<()> {
+        self.ensure_project(&path)?;
+        ensure!(
+            path.len() == 1,
+            "setting current milestone for subprojects is not handled yet"
+        );
+        self.milestone(&milestone)?;
+        self.project.project.milestone = Some(milestone);
+
+        Ok(())
+    }
+
+    fn set_status(&mut self, path: ProjectDir, status: Status) -> Result<()> {
+        let (milestone_name, task_name) = self.path_milestone_and_task(&path)?;
+        ensure!(task_name.is_none(), "task status is handled by mark-task");
+
+        let milestone = self.milestone_mut(&milestone_name)?;
+        milestone.status = status;
+
+        Ok(())
     }
 
     fn commit_changes(&mut self) -> Result<()> {
@@ -485,6 +604,24 @@ impl ProjectStorage for StatusCluster {
 
     fn get_task(&mut self, path: ProjectDir) -> Result<repr::Task> {
         self.get_instance_db(&path)?.get_task(path)
+    }
+
+    fn create_milestone(&mut self, path: ProjectDir, milestone: repr::Milestone) -> Result<()> {
+        self.get_instance_db(&path)?
+            .create_milestone(path, milestone)
+    }
+
+    fn get_milestones(&mut self, path: ProjectDir) -> Result<Vec<(String, repr::Milestone)>> {
+        self.get_instance_db(&path)?.get_milestones(path)
+    }
+
+    fn set_current_milestone(&mut self, path: ProjectDir, milestone: String) -> Result<()> {
+        self.get_instance_db(&path)?
+            .set_current_milestone(path, milestone)
+    }
+
+    fn set_status(&mut self, path: ProjectDir, status: Status) -> Result<()> {
+        self.get_instance_db(&path)?.set_status(path, status)
     }
 
     fn commit_changes(&mut self) -> Result<()> {

@@ -187,7 +187,6 @@ pub struct Project {
     pub edition: Version,
 
     pub current_milestone: String,
-    pub miliestones: HashMap<String, Status>,
 
     pub kinds: Vec<String>,
     pub description: String,

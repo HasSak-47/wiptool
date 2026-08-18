@@ -1,6 +1,7 @@
 use anyhow::*;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{fmt, str::FromStr};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Version {
@@ -224,6 +225,20 @@ impl Version {
             }
             _ => Err(anyhow!("invalid version format: {input}")),
         }
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_version_string())
+    }
+}
+
+impl FromStr for Version {
+    type Err = anyhow::Error;
+
+    fn from_str(input: &str) -> Result<Self> {
+        Version::from_version_string(input)
     }
 }
 

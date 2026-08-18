@@ -1,12 +1,16 @@
+mod add_milestone;
 mod add_task;
 mod completion;
 mod delete_project;
 mod init_project;
 mod list;
+mod list_milestones;
 mod mark_task;
 mod new_project;
 mod promote_task;
 mod remove_task;
+mod set_current_milestone;
+mod set_status;
 mod set_subproject;
 
 use std::{fs::File, path::PathBuf};
@@ -17,9 +21,11 @@ use clap::{Args, Parser, Subcommand};
 use crate::interface::ProjectStorage;
 
 use self::{
-    add_task::AddTask, completion::Completion, delete_project::DeleteProject,
-    init_project::InitProject, list::List, mark_task::MarkTask, new_project::NewProject,
-    promote_task::PromoteTask, remove_task::RemoveTask, set_subproject::SetSubproject,
+    add_milestone::AddMilestone, add_task::AddTask, completion::Completion,
+    delete_project::DeleteProject, init_project::InitProject, list::List,
+    list_milestones::ListMilestones, mark_task::MarkTask, new_project::NewProject,
+    promote_task::PromoteTask, remove_task::RemoveTask, set_current_milestone::SetCurrentMilestone,
+    set_status::SetStatus, set_subproject::SetSubproject,
 };
 
 #[derive(Parser, Clone)]
@@ -64,6 +70,10 @@ enum Commands {
     MarkTask(MarkTask),
     List(List),
     Completion(Completion),
+    AddMilestone(AddMilestone),
+    SetCurrentMilestone(SetCurrentMilestone),
+    ListMilestones(ListMilestones),
+    SetStatus(SetStatus),
 }
 
 pub fn run() -> Result<()> {
@@ -109,8 +119,12 @@ pub fn run() -> Result<()> {
         Commands::NewProject(new) => new.run(&opts, &mut storage)?,
         Commands::DeleteProject(delete) => delete.run(&opts, &mut storage)?,
         Commands::AddTask(task) => task.run(&opts, &mut storage)?,
+        Commands::AddMilestone(milestone) => milestone.run(&opts, &mut storage)?,
         Commands::RemoveTask(remove_task) => remove_task.run(&opts, &mut storage)?,
         Commands::MarkTask(mark_task) => mark_task.run(&opts, &mut storage)?,
+        Commands::SetCurrentMilestone(set) => set.run(&opts, &mut storage)?,
+        Commands::ListMilestones(list) => list.run(&opts, &mut storage)?,
+        Commands::SetStatus(set) => set.run(&opts, &mut storage)?,
         Commands::Completion(_) => unreachable!("completion exits before storage initialization"),
         _ => todo!("Todo"),
     }

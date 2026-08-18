@@ -92,27 +92,14 @@ impl List {
         );
     }
 
-    fn generate_todo_value(project: &(&ProjectDir, Project)) -> f64 {
-        let done = project
-            .1
-            .get_done_tasks()
-            .iter()
-            .fold(0., |val, task| val + task.1.difficulty);
-        let todo = project
-            .1
-            .get_todo_tasks()
-            .iter()
-            .fold(0., |val, task| val + task.1.difficulty);
-
-        return done / (todo + done);
-    }
-
     fn compare_todo(
         project_a: &(&ProjectDir, Project),
         project_b: &(&ProjectDir, Project),
     ) -> std::cmp::Ordering {
-        return List::generate_todo_value(project_a)
-            .total_cmp(&List::generate_todo_value(project_b));
+        return project_a
+            .1
+            .get_difficulty_completion()
+            .total_cmp(&project_b.1.get_difficulty_completion());
     }
 
     fn compare_category(

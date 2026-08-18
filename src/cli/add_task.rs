@@ -20,6 +20,9 @@ pub(crate) struct AddTask {
     difficulty: f64,
     priority: f64,
 
+    #[arg(short, long)]
+    milestone: Option<String>,
+
     project: Option<String>,
 }
 
@@ -54,6 +57,12 @@ impl AddTask {
         };
 
         let mut task_path = path.clone();
+        if let Some(milestone) = &self.milestone {
+            if task_path.vec.iter().any(|segment| segment.is_milestone()) {
+                bail!("milestone specified both in path and with --milestone");
+            }
+            task_path.add_milestone(milestone)?;
+        }
         task_path.add_task(&self.name)?;
 
         if storage.task_exists(task_path.clone())? {
