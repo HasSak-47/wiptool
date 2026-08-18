@@ -5,7 +5,7 @@ use clap::{Parser, ValueEnum};
 
 use crate::{
     cli::Opts,
-    interface::ProjectStorage,
+    interface::{ProjectDir, ProjectStorage},
     repr::{Project, Status},
 };
 
@@ -31,8 +31,8 @@ pub(crate) struct List {
     #[arg(short, long)]
     state: bool,
 
-    #[arg(long, value_delimiter = ',', default_value = "")]
-    sort_by: Vec<SortBy>,
+    #[arg(long)]
+    sort_by: Option<SortBy>,
 
     #[arg(long, value_delimiter = ',', default_value = "")]
     kinds: Vec<String>,
@@ -92,33 +92,89 @@ impl List {
         );
     }
 
+    fn generate_todo_value(project: &(&ProjectDir, Project)) -> f64 {
+        let done = project
+            .1
+            .get_done_tasks()
+            .iter()
+            .fold(0., |val, task| val + task.1.difficulty);
+        let todo = project
+            .1
+            .get_todo_tasks()
+            .iter()
+            .fold(0., |val, task| val + task.1.difficulty);
+
+        return done / (todo + done);
+    }
+
+    fn compare_todo(
+        project_a: &(&ProjectDir, Project),
+        project_b: &(&ProjectDir, Project),
+    ) -> std::cmp::Ordering {
+        return List::generate_todo_value(project_a)
+            .total_cmp(&List::generate_todo_value(project_b));
+    }
+
+    fn compare_category(
+        project_a: &(&ProjectDir, Project),
+        project_b: &(&ProjectDir, Project),
+    ) -> std::cmp::Ordering {
+        let mut a = project_a.1.kinds.clone();
+        a.sort();
+        let mut b = project_b.1.kinds.clone();
+        b.sort();
+
+        return a.first().unwrap().cmp(b.first().unwrap());
+    }
+
+    fn compare_name(
+        project_a: &(&ProjectDir, Project),
+        project_b: &(&ProjectDir, Project),
+    ) -> std::cmp::Ordering {
+        let a = &project_a.1.name;
+        let b = &project_b.1.name;
+
+        return a.cmp(b);
+    }
+
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
         let paths = storage.get_projects_path()?;
         let home_dir = dirs::home_dir();
 
-        let projects = paths.iter().filter_map(|path| {
-            log::debug!("getting path: {path:?}",);
-            let project = storage.get_project(path.to_owned().to_owned()).ok()?;
-            let project_status = &project
-                .milestones
-                .get(&project.current_milestone)
-                .unwrap()
-                .status;
+        let mut projects: Vec<_> = paths
+            .iter()
+            .filter_map(|path| {
+                log::debug!("getting path: {path:?}",);
+                let project = storage.get_project(path.to_owned().to_owned()).ok()?;
+                let project_status = &project
+                    .milestones
+                    .get(&project.current_milestone)
+                    .unwrap()
+                    .status;
 
-            if let Some(s) = &self.exact_status {
-                if *s != *project_status {
-                    return None;
+                if let Some(s) = &self.exact_status {
+                    if *s != *project_status {
+                        return None;
+                    }
                 }
-            }
 
-            if let Some(s) = &self.status {
-                if !project_status.aproximate(s) {
-                    return None;
+                if let Some(s) = &self.status {
+                    if !project_status.aproximate(s) {
+                        return None;
+                    }
                 }
-            }
 
-            return Some((path, project));
-        });
+                return Some((path, project));
+            })
+            .collect();
+
+        if let Some(sort) = &self.sort_by {
+            match sort {
+                SortBy::Name => projects.sort_by(List::compare_name),
+                SortBy::Completion => projects.sort_by(List::compare_todo),
+                SortBy::Category => projects.sort_by(List::compare_category),
+            }
+        }
 
         for (path, project) in projects {
             print!("{path}");
