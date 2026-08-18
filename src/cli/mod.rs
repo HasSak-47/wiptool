@@ -5,6 +5,7 @@ mod delete_project;
 mod init_project;
 mod list;
 mod list_milestones;
+mod list_tasks;
 mod mark_task;
 mod new_project;
 mod promote_task;
@@ -23,9 +24,10 @@ use crate::interface::ProjectStorage;
 use self::{
     add_milestone::AddMilestone, add_task::AddTask, completion::Completion,
     delete_project::DeleteProject, init_project::InitProject, list::List,
-    list_milestones::ListMilestones, mark_task::MarkTask, new_project::NewProject,
-    promote_task::PromoteTask, remove_task::RemoveTask, set_current_milestone::SetCurrentMilestone,
-    set_status::SetStatus, set_subproject::SetSubproject,
+    list_milestones::ListMilestones, list_tasks::ListTasks, mark_task::MarkTask,
+    new_project::NewProject, promote_task::PromoteTask, remove_task::RemoveTask,
+    set_current_milestone::SetCurrentMilestone, set_status::SetStatus,
+    set_subproject::SetSubproject,
 };
 
 #[derive(Parser, Clone)]
@@ -73,6 +75,7 @@ enum Commands {
     AddMilestone(AddMilestone),
     SetCurrentMilestone(SetCurrentMilestone),
     ListMilestones(ListMilestones),
+    ListTasks(ListTasks),
     SetStatus(SetStatus),
 }
 
@@ -124,6 +127,7 @@ pub fn run() -> Result<()> {
         Commands::MarkTask(mark_task) => mark_task.run(&opts, &mut storage)?,
         Commands::SetCurrentMilestone(set) => set.run(&opts, &mut storage)?,
         Commands::ListMilestones(list) => list.run(&opts, &mut storage)?,
+        Commands::ListTasks(list) => list.run(&opts, &mut storage)?,
         Commands::SetStatus(set) => set.run(&opts, &mut storage)?,
         Commands::Completion(_) => unreachable!("completion exits before storage initialization"),
         _ => todo!("Todo"),

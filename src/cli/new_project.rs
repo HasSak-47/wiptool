@@ -25,7 +25,7 @@ pub(crate) struct NewProject {
     #[arg(
         short = 'S',
         long = "storage-in-data",
-        conflicts_with = "storage-location"
+        conflicts_with = "storage_location"
     )]
     storage_in_data: bool,
 }
@@ -58,15 +58,8 @@ impl NewProject {
             bail!("project at {} already exists", db_location.display());
         }
 
-        storage
-            .create_project(path, project, repr::Location::Local(db_location.clone()))
-            .expect(&format!(
-                "failed to create project to: {}",
-                db_location.display()
-            ));
-        storage
-            .commit_changes()
-            .expect(&format!("failed to commit to: {}", db_location.display()));
+        storage.create_project(path, project, repr::Location::Local(db_location))?;
+        storage.commit_changes()?;
 
         Ok(())
     }
