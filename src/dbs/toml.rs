@@ -296,14 +296,6 @@ impl ProjectStorage for StatusDB {
             task_name.is_none(),
             "path must point to a milestone or project"
         );
-        ensure!(
-            !self
-                .project
-                .milestones
-                .iter()
-                .any(|existing| existing.name == milestone_name),
-            "milestone already exists: {milestone_name}"
-        );
 
         let mut todo = HashMap::new();
         let mut done = HashMap::new();
@@ -642,10 +634,6 @@ impl ProjectStorage for StatusCluster {
         project: repr::Project,
         storage_location: Location,
     ) -> Result<()> {
-        if self.instances.contains_key(&path) {
-            bail!("project already exists at given path");
-        }
-
         let project_location = project.location;
         let current_milestone = if project.current_milestone.is_empty() {
             project

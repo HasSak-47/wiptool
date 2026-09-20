@@ -19,6 +19,7 @@ pub(crate) struct AddTask {
     done: bool,
     difficulty: f64,
     priority: f64,
+    force: bool,
 
     #[arg(short, long)]
     milestone: Option<String>,
@@ -65,7 +66,7 @@ impl AddTask {
         }
         task_path.add_task(&self.name)?;
 
-        if storage.task_exists(task_path.clone())? {
+        if !self.force && storage.task_exists(task_path.clone())? {
             bail!("Task [{}]: already exist", self.name);
         }
 

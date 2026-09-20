@@ -1,18 +1,10 @@
-mod add_milestone;
-mod add_task;
 mod completion;
-mod delete_project;
-mod init_project;
-mod list;
-mod list_milestones;
-mod list_tasks;
-mod mark_task;
-mod new_project;
-mod promote_task;
-mod remove_task;
-mod set_current_milestone;
 mod set_status;
 mod set_subproject;
+
+pub mod milestones;
+pub mod projects;
+pub mod tasks;
 
 use std::{fs::File, path::PathBuf};
 
@@ -22,12 +14,21 @@ use clap::{Args, Parser, Subcommand};
 use crate::interface::ProjectStorage;
 
 use self::{
-    add_milestone::AddMilestone, add_task::AddTask, completion::Completion,
-    delete_project::DeleteProject, init_project::InitProject, list::List,
-    list_milestones::ListMilestones, list_tasks::ListTasks, mark_task::MarkTask,
-    new_project::NewProject, promote_task::PromoteTask, remove_task::RemoveTask,
-    set_current_milestone::SetCurrentMilestone, set_status::SetStatus,
+    completion::Completion,
+    milestones::{
+        add_milestone::AddMilestone, list_milestones::ListMilestones,
+        set_current_milestone::SetCurrentMilestone,
+    },
+    projects::{
+        delete_project::DeleteProject, init_project::InitProject, list::List,
+        new_project::NewProject,
+    },
+    set_status::SetStatus,
     set_subproject::SetSubproject,
+    tasks::{
+        add_task::AddTask, list_tasks::ListTasks, mark_task::MarkTask, promote_task::PromoteTask,
+        remove_task::RemoveTask,
+    },
 };
 
 #[derive(Parser, Clone)]
