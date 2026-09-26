@@ -21,7 +21,7 @@ enum SortBy {
 list all the projects
 */
 #[derive(Parser, Clone)]
-pub(crate) struct List {
+pub(crate) struct ProjectList {
     #[arg(short, long)]
     color: bool,
 
@@ -44,7 +44,7 @@ pub(crate) struct List {
     exact_status: Option<Status>,
 }
 
-impl List {
+impl ProjectList {
     fn generate_state_string(project: &Project) -> String {
         let done_difficulty = project.get_done_difficulty();
         let todo_difficulty = project.get_todo_difficulty();
@@ -157,19 +157,22 @@ impl List {
 
         if let Some(sort) = &self.sort_by {
             match sort {
-                SortBy::Name => projects.sort_by(List::compare_name),
-                SortBy::Completion => projects.sort_by(List::compare_todo),
-                SortBy::Category => projects.sort_by(List::compare_category),
+                SortBy::Name => projects.sort_by(ProjectList::compare_name),
+                SortBy::Completion => projects.sort_by(ProjectList::compare_todo),
+                SortBy::Category => projects.sort_by(ProjectList::compare_category),
             }
         }
 
         for (path, project) in projects {
             print!("{path}");
             if self.location {
-                print!(" @ {}", List::generate_location_string(&project, &home_dir));
+                print!(
+                    " @ {}",
+                    ProjectList::generate_location_string(&project, &home_dir)
+                );
             }
             if self.state {
-                print!(" | {}", List::generate_state_string(&project));
+                print!(" | {}", ProjectList::generate_state_string(&project));
             }
             println!()
         }

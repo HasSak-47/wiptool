@@ -11,7 +11,10 @@ use std::{fs::File, path::PathBuf};
 use anyhow::{bail, Result};
 use clap::{Args, Parser, Subcommand};
 
-use crate::interface::ProjectStorage;
+use crate::{
+    cli::{projects::ProjectCommands, tasks::TaskCommands},
+    interface::ProjectStorage,
+};
 
 use self::{
     completion::Completion,
@@ -19,16 +22,8 @@ use self::{
         add_milestone::AddMilestone, list_milestones::ListMilestones,
         set_current_milestone::SetCurrentMilestone,
     },
-    projects::{
-        delete_project::DeleteProject, init_project::InitProject, list::List,
-        new_project::NewProject,
-    },
     set_status::SetStatus,
     set_subproject::SetSubproject,
-    tasks::{
-        add_task::AddTask, list_tasks::ListTasks, mark_task::MarkTask, promote_task::PromoteTask,
-        remove_task::RemoveTask,
-    },
 };
 
 #[derive(Parser, Clone)]
@@ -63,20 +58,17 @@ pub(crate) struct Opts {
 
 #[derive(Subcommand, Clone)]
 enum Commands {
-    NewProject(NewProject),
+    #[command(subcommand)]
+    Task(TaskCommands),
+
+    #[command(subcommand)]
+    Project(ProjectCommands),
+
     SetSubproject(SetSubproject),
-    InitProject(InitProject),
-    DeleteProject(DeleteProject),
-    AddTask(AddTask),
-    RemoveTask(RemoveTask),
-    PromoteTask(PromoteTask),
-    MarkTask(MarkTask),
-    List(List),
     Completion(Completion),
     AddMilestone(AddMilestone),
     SetCurrentMilestone(SetCurrentMilestone),
     ListMilestones(ListMilestones),
-    ListTasks(ListTasks),
     SetStatus(SetStatus),
 }
 
@@ -119,17 +111,12 @@ pub fn run() -> Result<()> {
     let mut storage: Box<dyn ProjectStorage> = Box::new(cluster);
 
     match cli.command {
-        Commands::List(l) => l.run(&opts, &mut storage)?,
-        Commands::NewProject(new) => new.run(&opts, &mut storage)?,
-        Commands::DeleteProject(delete) => delete.run(&opts, &mut storage)?,
-        Commands::AddTask(task) => task.run(&opts, &mut storage)?,
         Commands::AddMilestone(milestone) => milestone.run(&opts, &mut storage)?,
-        Commands::RemoveTask(remove_task) => remove_task.run(&opts, &mut storage)?,
-        Commands::MarkTask(mark_task) => mark_task.run(&opts, &mut storage)?,
         Commands::SetCurrentMilestone(set) => set.run(&opts, &mut storage)?,
         Commands::ListMilestones(list) => list.run(&opts, &mut storage)?,
-        Commands::ListTasks(list) => list.run(&opts, &mut storage)?,
         Commands::SetStatus(set) => set.run(&opts, &mut storage)?,
+        Commands::Task(task) => task.run(&opts, &mut storage)?,
+        Commands::Project(project) => project.run(&opts, &mut storage)?,
         Commands::Completion(_) => unreachable!("completion exits before storage initialization"),
         _ => todo!("Todo"),
     }

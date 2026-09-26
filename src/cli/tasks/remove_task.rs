@@ -13,12 +13,12 @@ use crate::{
 deletes a task from the project tree
 */
 #[derive(Parser, Clone)]
-pub(crate) struct RemoveTask {
+pub(crate) struct DeleteTask {
     name: String,
     project: Option<String>,
 }
 
-impl RemoveTask {
+impl DeleteTask {
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> anyhow::Result<()> {
         let path = if let Some(project) = &self.project {
             // shitty ass ser/de lmao
