@@ -4,11 +4,14 @@ pub mod delete_project;
 pub mod init_project;
 pub mod list;
 pub mod new_project;
+pub mod rename_project;
+pub mod set_subproject;
 
 use delete_project::*;
 use init_project::*;
 use list::*;
 use new_project::*;
+use rename_project::*;
 
 use crate::{cli::Opts, interface::ProjectStorage};
 
@@ -18,6 +21,7 @@ pub(crate) enum ProjectCommands {
     Init(InitProject),
     List(ProjectList),
     New(NewProject),
+    Rename(RenameProject),
 }
 
 impl ProjectCommands {
@@ -27,6 +31,7 @@ impl ProjectCommands {
             ProjectCommands::New(cmd) => cmd.run(opts, storage)?,
             ProjectCommands::List(cmd) => cmd.run(opts, storage)?,
             ProjectCommands::Delete(cmd) => cmd.run(opts, storage)?,
+            ProjectCommands::Rename(cmd) => cmd.run(opts, storage)?,
         }
         return Ok(());
     }

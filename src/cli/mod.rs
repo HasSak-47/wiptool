@@ -1,6 +1,4 @@
 mod completion;
-mod set_status;
-mod set_subproject;
 
 pub mod milestones;
 pub mod projects;
@@ -12,19 +10,11 @@ use anyhow::{bail, Result};
 use clap::{Args, Parser, Subcommand};
 
 use crate::{
-    cli::{projects::ProjectCommands, tasks::TaskCommands},
+    cli::{milestones::MilestoneCommands, projects::ProjectCommands, tasks::TaskCommands},
     interface::ProjectStorage,
 };
 
-use self::{
-    completion::Completion,
-    milestones::{
-        add_milestone::AddMilestone, list_milestones::ListMilestones,
-        set_current_milestone::SetCurrentMilestone,
-    },
-    set_status::SetStatus,
-    set_subproject::SetSubproject,
-};
+use self::completion::Completion;
 
 #[derive(Parser, Clone)]
 #[command(version, about, long_about = None)]
@@ -64,12 +54,10 @@ enum Commands {
     #[command(subcommand)]
     Project(ProjectCommands),
 
-    SetSubproject(SetSubproject),
+    #[command(subcommand)]
+    Milestone(MilestoneCommands),
+
     Completion(Completion),
-    AddMilestone(AddMilestone),
-    SetCurrentMilestone(SetCurrentMilestone),
-    ListMilestones(ListMilestones),
-    SetStatus(SetStatus),
 }
 
 pub fn run() -> Result<()> {
@@ -111,14 +99,10 @@ pub fn run() -> Result<()> {
     let mut storage: Box<dyn ProjectStorage> = Box::new(cluster);
 
     match cli.command {
-        Commands::AddMilestone(milestone) => milestone.run(&opts, &mut storage)?,
-        Commands::SetCurrentMilestone(set) => set.run(&opts, &mut storage)?,
-        Commands::ListMilestones(list) => list.run(&opts, &mut storage)?,
-        Commands::SetStatus(set) => set.run(&opts, &mut storage)?,
+        Commands::Milestone(milestone) => milestone.run(&opts, &mut storage)?,
         Commands::Task(task) => task.run(&opts, &mut storage)?,
         Commands::Project(project) => project.run(&opts, &mut storage)?,
         Commands::Completion(_) => unreachable!("completion exits before storage initialization"),
-        _ => todo!("Todo"),
     }
 
     Ok(())

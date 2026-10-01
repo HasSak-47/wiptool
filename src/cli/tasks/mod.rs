@@ -3,12 +3,14 @@ pub mod list_tasks;
 pub mod mark_task;
 pub mod promote_task;
 pub mod remove_task;
+pub mod rename_task;
 
 use add_task::*;
 use list_tasks::*;
 use mark_task::*;
 use promote_task::*;
 use remove_task::*;
+use rename_task::*;
 
 use crate::{cli::Opts, interface::ProjectStorage};
 use clap::Subcommand;
@@ -19,6 +21,7 @@ pub(crate) enum TaskCommands {
     List(ListTasks),
     Mark(MarkTask),
     Promote(PromoteTask),
+    Rename(RenameTask),
     Delete(DeleteTask),
 }
 
@@ -30,6 +33,7 @@ impl TaskCommands {
             TaskCommands::List(cmd) => cmd.run(opts, storage)?,
             TaskCommands::Promote(cmd) => cmd.run(opts, storage)?,
             TaskCommands::Delete(cmd) => cmd.run(opts, storage)?,
+            TaskCommands::Rename(cmd) => cmd.run(opts, storage)?,
         }
         return Ok(());
     }

@@ -21,12 +21,12 @@ impl ListMilestones {
             .tasks
             .values()
             .filter(|task| !task.todo)
-            .fold(0., |total, task| total + task.difficulty);
+            .fold(0., |total, task| total + task.difficulty.unwrap_or(0.));
         let todo = milestone
             .tasks
             .values()
             .filter(|task| task.todo)
-            .fold(0., |total, task| total + task.difficulty);
+            .fold(0., |total, task| total + task.difficulty.unwrap_or(0.));
         let total = done + todo;
 
         if total == 0. {

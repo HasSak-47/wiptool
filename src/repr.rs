@@ -208,14 +208,17 @@ pub struct Milestone {
 #[derive(Debug, Default, Clone)]
 pub struct Task {
     pub todo: bool,
-    pub priority: f64,
-    pub difficulty: f64,
+    pub priority: Option<f64>,
+    pub difficulty: Option<f64>,
+    pub time_estimate: Option<u64>,
 }
 
 impl Project {
     /* priority */
     fn tasks_get_priority(tasks: Vec<(&String, &Task)>) -> f64 {
-        tasks.iter().fold(0., |x, task| x + task.1.priority)
+        tasks
+            .iter()
+            .fold(0., |x, task| x + task.1.priority.unwrap_or(0.))
     }
 
     pub fn get_todo_tasks(&self) -> Vec<(&String, &Task)> {
@@ -242,7 +245,9 @@ impl Project {
 
     /* difficulty */
     fn tasks_get_difficulty(tasks: Vec<(&String, &Task)>) -> f64 {
-        tasks.iter().fold(0., |x, task| x + task.1.difficulty)
+        tasks
+            .iter()
+            .fold(0., |x, task| x + task.1.difficulty.unwrap_or(0.))
     }
 
     pub fn get_done_difficulty(&self) -> f64 {
@@ -277,7 +282,7 @@ impl Project {
         let mut total = 0.;
 
         for project in self.get_todo_tasks() {
-            total += project.1.difficulty;
+            total += project.1.difficulty.unwrap_or(0.);
         }
 
         for project in &self.subprojects {

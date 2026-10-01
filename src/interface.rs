@@ -307,6 +307,10 @@ pub trait ProjectStorage {
     fn promote_task(&mut self, path: ProjectDir) -> Result<()>;
     fn get_task(&mut self, path: ProjectDir) -> Result<Task>;
 
+    fn rename_project(&mut self, path: ProjectDir, new_name: String) -> Result<()>;
+    fn rename_milestone(&mut self, path: ProjectDir, new_name: String) -> Result<()>;
+    fn rename_task(&mut self, path: ProjectDir, new_name: String) -> Result<()>;
+
     /** creates or overrides milestone data */
     fn create_milestone(&mut self, path: ProjectDir, milestone: Milestone) -> Result<()>;
     fn get_milestones(&mut self, path: ProjectDir) -> Result<Vec<(String, Milestone)>>;

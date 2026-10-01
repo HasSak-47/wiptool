@@ -58,12 +58,12 @@ impl ListTasks {
             .tasks
             .values()
             .filter(|task| !task.todo)
-            .fold(0., |total, task| total + task.difficulty);
+            .fold(0., |total, task| total + task.difficulty.unwrap_or(0.));
         let todo = milestone
             .tasks
             .values()
             .filter(|task| task.todo)
-            .fold(0., |total, task| total + task.difficulty);
+            .fold(0., |total, task| total + task.difficulty.unwrap_or(0.));
         let total = done + todo;
 
         if total == 0. {
@@ -108,9 +108,20 @@ impl ListTasks {
 
         for (name, task) in tasks {
             let state = if task.todo { "todo" } else { "done" };
+            let priority = task
+                .priority
+                .map(|value| format!("{value:.2}"))
+                .unwrap_or_else(|| "—".to_string());
+            let difficulty = task
+                .difficulty
+                .map(|value| format!("{value:.2}"))
+                .unwrap_or_else(|| "—".to_string());
+            let estimate = task
+                .time_estimate
+                .map(|value| format!("{value} min"))
+                .unwrap_or_else(|| "—".to_string());
             println!(
-                "{state:4} {name} | priority: {:.2} | difficulty: {:.2}",
-                task.priority, task.difficulty
+                "{state:4} {name} | priority: {priority} | difficulty: {difficulty} | estimate: {estimate}"
             );
         }
 

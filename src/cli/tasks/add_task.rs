@@ -17,8 +17,14 @@ pub(crate) struct AddTask {
     name: String,
     #[arg(short, long)]
     done: bool,
-    difficulty: f64,
-    priority: f64,
+    #[arg(long)]
+    difficulty: Option<f64>,
+    #[arg(long)]
+    priority: Option<f64>,
+    /// Estimated time to complete the task, in minutes.
+    #[arg(long)]
+    time_estimate: Option<u64>,
+    #[arg(short, long)]
     force: bool,
 
     #[arg(short, long)]
@@ -33,6 +39,7 @@ impl AddTask {
         let task = repr::Task {
             priority: self.priority,
             difficulty: self.difficulty,
+            time_estimate: self.time_estimate,
             todo: !self.done,
         };
 

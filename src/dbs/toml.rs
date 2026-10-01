@@ -32,8 +32,12 @@ pub struct ProjectHeader {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Task {
-    pub priority: f64,
-    pub difficulty: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub difficulty: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_estimate: Option<u64>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -225,6 +229,7 @@ impl ProjectStorage for StatusDB {
                             todo: true,
                             priority: task.priority,
                             difficulty: task.difficulty,
+                            time_estimate: task.time_estimate,
                         },
                     )
                 })
@@ -235,6 +240,7 @@ impl ProjectStorage for StatusDB {
                             todo: false,
                             priority: task.priority,
                             difficulty: task.difficulty,
+                            time_estimate: task.time_estimate,
                         },
                     )
                 }))
@@ -272,6 +278,7 @@ impl ProjectStorage for StatusDB {
                 todo: true,
                 priority: task.priority,
                 difficulty: task.difficulty,
+                time_estimate: task.time_estimate,
             });
         }
 
@@ -280,10 +287,78 @@ impl ProjectStorage for StatusDB {
                 priority: task.priority,
                 todo: false,
                 difficulty: task.difficulty,
+                time_estimate: task.time_estimate,
             });
         }
 
         bail!("no exisiting task")
+    }
+
+    fn rename_project(&mut self, path: ProjectDir, new_name: String) -> Result<()> {
+        self.ensure_project(&path)?;
+        ensure!(path.len() == 1, "renaming subprojects is not supported");
+        ProjectDir::parse(format!("{new_name}/"))?;
+        self.project.project.name = new_name;
+        Ok(())
+    }
+
+    fn rename_milestone(&mut self, path: ProjectDir, new_name: String) -> Result<()> {
+        let (old_name, task_name) = self.path_milestone_and_task(&path)?;
+        ensure!(task_name.is_none(), "path must point to a milestone");
+        ensure!(
+            path.vec.iter().any(|segment| segment.is_milestone()),
+            "path must explicitly identify a milestone"
+        );
+        ProjectDir::parse(format!("{}/@{new_name}/", self.project.project.name))?;
+
+        if old_name == new_name {
+            self.milestone(&old_name)?;
+            return Ok(());
+        }
+        ensure!(
+            self.project
+                .milestones
+                .iter()
+                .all(|milestone| milestone.name != new_name),
+            "milestone already exists: {new_name}"
+        );
+
+        self.milestone_mut(&old_name)?.name = new_name.clone();
+        if self.project.project.milestone.as_deref() == Some(&old_name) {
+            self.project.project.milestone = Some(new_name);
+        }
+        Ok(())
+    }
+
+    fn rename_task(&mut self, path: ProjectDir, new_name: String) -> Result<()> {
+        let (milestone_name, old_name) = self.path_milestone_and_task(&path)?;
+        let old_name = old_name.ok_or_else(|| anyhow!("path does not point to a task"))?;
+        ProjectDir::parse(format!(
+            "{}/@{milestone_name}/{new_name}",
+            self.project.project.name
+        ))?;
+
+        let milestone = self.milestone_mut(&milestone_name)?;
+        if old_name == new_name {
+            ensure!(
+                milestone.todo.contains_key(&old_name) || milestone.done.contains_key(&old_name),
+                "task not found: {old_name}"
+            );
+            return Ok(());
+        }
+        ensure!(
+            !milestone.todo.contains_key(&new_name) && !milestone.done.contains_key(&new_name),
+            "task already exists: {new_name}"
+        );
+
+        if let Some(task) = milestone.todo.remove(&old_name) {
+            milestone.todo.insert(new_name, task);
+        } else if let Some(task) = milestone.done.remove(&old_name) {
+            milestone.done.insert(new_name, task);
+        } else {
+            bail!("task not found: {old_name}");
+        }
+        Ok(())
     }
 
     fn create_milestone(
@@ -303,6 +378,7 @@ impl ProjectStorage for StatusDB {
             let db_task = Task {
                 priority: task.priority,
                 difficulty: task.difficulty,
+                time_estimate: task.time_estimate,
             };
             if task.todo {
                 todo.insert(task_name, db_task);
@@ -351,6 +427,7 @@ impl ProjectStorage for StatusDB {
                                 todo: true,
                                 priority: task.priority,
                                 difficulty: task.difficulty,
+                                time_estimate: task.time_estimate,
                             },
                         )
                     })
@@ -361,6 +438,7 @@ impl ProjectStorage for StatusDB {
                                 todo: false,
                                 priority: task.priority,
                                 difficulty: task.difficulty,
+                                time_estimate: task.time_estimate,
                             },
                         )
                     }))
@@ -439,6 +517,7 @@ impl ProjectStorage for StatusDB {
                 Task {
                     priority: task.priority,
                     difficulty: task.difficulty,
+                    time_estimate: task.time_estimate,
                 },
             );
         } else {
@@ -448,6 +527,7 @@ impl ProjectStorage for StatusDB {
                 Task {
                     priority: task.priority,
                     difficulty: task.difficulty,
+                    time_estimate: task.time_estimate,
                 },
             );
         }
@@ -598,6 +678,39 @@ impl ProjectStorage for StatusCluster {
         self.get_instance_db(&path)?.get_task(path)
     }
 
+    fn rename_project(&mut self, path: ProjectDir, new_name: String) -> Result<()> {
+        let old_root = Self::root_path(&path)?;
+        ensure!(path.len() == 1, "renaming subprojects is not supported");
+        let new_root = ProjectDir::parse(format!("{new_name}/"))?;
+
+        if old_root == new_root {
+            ensure!(self.instances.contains_key(&old_root), "project not found");
+            return Ok(());
+        }
+        ensure!(
+            !self.instances.contains_key(&new_root),
+            "project already exists: {new_name}"
+        );
+
+        self.get_instance_db(&old_root)?
+            .rename_project(old_root.clone(), new_name)?;
+        let instance = self
+            .instances
+            .remove(&old_root)
+            .ok_or_else(|| anyhow!("project not found"))?;
+        self.instances.insert(new_root, instance);
+        Ok(())
+    }
+
+    fn rename_milestone(&mut self, path: ProjectDir, new_name: String) -> Result<()> {
+        self.get_instance_db(&path)?
+            .rename_milestone(path, new_name)
+    }
+
+    fn rename_task(&mut self, path: ProjectDir, new_name: String) -> Result<()> {
+        self.get_instance_db(&path)?.rename_task(path, new_name)
+    }
+
     fn create_milestone(&mut self, path: ProjectDir, milestone: repr::Milestone) -> Result<()> {
         self.get_instance_db(&path)?
             .create_milestone(path, milestone)
@@ -657,6 +770,7 @@ impl ProjectStorage for StatusCluster {
                     let db_task = Task {
                         priority: task.priority,
                         difficulty: task.difficulty,
+                        time_estimate: task.time_estimate,
                     };
 
                     if task.todo {
@@ -734,5 +848,97 @@ impl ProjectStorage for StatusCluster {
     fn delete_task(&mut self, path: ProjectDir) -> Result<()> {
         self.get_instance_db(&path)?.delete_task(path)?;
         return Ok(());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{Milestone, Project, ProjectHeader, StatusDB, Task};
+    use crate::{
+        interface::{ProjectDir, ProjectStorage},
+        repr::{Location, Status},
+        version::Version,
+    };
+
+    #[test]
+    fn task_metrics_are_optional_in_toml() {
+        let task: Task = toml::from_str("").expect("empty task should deserialize");
+
+        assert_eq!(task.priority, None);
+        assert_eq!(task.difficulty, None);
+        assert_eq!(task.time_estimate, None);
+        assert_eq!(toml::to_string(&task).expect("task should serialize"), "");
+    }
+
+    #[test]
+    fn existing_numeric_task_metrics_still_deserialize() {
+        let task: Task = toml::from_str("priority = 2.5\ndifficulty = 3.0\ntime_estimate = 45\n")
+            .expect("numeric task metrics should deserialize");
+
+        assert_eq!(task.priority, Some(2.5));
+        assert_eq!(task.difficulty, Some(3.0));
+        assert_eq!(task.time_estimate, Some(45));
+    }
+
+    #[test]
+    fn status_db_renames_project_milestone_and_task() {
+        let mut todo = HashMap::new();
+        todo.insert(
+            "old-task".to_string(),
+            Task {
+                priority: Some(2.0),
+                difficulty: None,
+                time_estimate: Some(30),
+            },
+        );
+        let mut db = StatusDB {
+            project: Project {
+                project: ProjectHeader {
+                    name: "old-project".to_string(),
+                    edition: Version::default(),
+                    milestone: Some("old-milestone".to_string()),
+                    kinds: Vec::new(),
+                    description: String::new(),
+                    subprojects: Vec::new(),
+                },
+                milestones: vec![Milestone {
+                    name: "old-milestone".to_string(),
+                    status: Status::default(),
+                    version: None,
+                    todo,
+                    done: HashMap::new(),
+                }],
+            },
+            storage_location: Location::Local("unused.toml".into()),
+        };
+
+        db.rename_task(
+            ProjectDir::parse("old-project/@old-milestone/old-task").unwrap(),
+            "new-task".to_string(),
+        )
+        .unwrap();
+        db.rename_milestone(
+            ProjectDir::parse("old-project/@old-milestone/").unwrap(),
+            "new-milestone".to_string(),
+        )
+        .unwrap();
+        db.rename_project(
+            ProjectDir::parse("old-project/").unwrap(),
+            "new-project".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(db.project.project.name, "new-project");
+        assert_eq!(
+            db.project.project.milestone.as_deref(),
+            Some("new-milestone")
+        );
+        assert!(db.project.milestones[0].todo.contains_key("new-task"));
+        assert_eq!(
+            db.project.milestones[0].todo["new-task"].time_estimate,
+            Some(30)
+        );
     }
 }
