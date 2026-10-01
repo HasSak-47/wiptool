@@ -15,17 +15,19 @@ adds a task to a project
 #[derive(Debug, Parser, Clone)]
 pub(crate) struct AddTask {
     name: String,
+
     #[arg(short, long)]
     done: bool,
     #[arg(long)]
     difficulty: Option<f64>,
     #[arg(long)]
     priority: Option<f64>,
-    /// Estimated time to complete the task, in minutes.
+
     #[arg(long)]
     time_estimate: Option<u64>,
+
     #[arg(short, long)]
-    force: bool,
+    overwrite: bool,
 
     #[arg(short, long)]
     milestone: Option<String>,
@@ -73,7 +75,7 @@ impl AddTask {
         }
         task_path.add_task(&self.name)?;
 
-        if !self.force && storage.task_exists(task_path.clone())? {
+        if !self.overwrite && storage.task_exists(task_path.clone())? {
             bail!("Task [{}]: already exist", self.name);
         }
 
