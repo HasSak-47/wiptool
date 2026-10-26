@@ -1,10 +1,8 @@
-use std::env::current_dir;
-
 use anyhow::Result;
 use clap::Parser;
 
-use crate::cli::Opts;
-use wiptool_core::{Location, Milestone, ProjectDir, ProjectStorage, Task};
+use crate::cli::{get_project_path, Opts};
+use wiptool_core::{Milestone, ProjectStorage, Task};
 
 /**
 lists tasks for a project milestone
@@ -24,32 +22,6 @@ pub(crate) struct ListTasks {
 }
 
 impl ListTasks {
-    fn resolve_project_path(
-        storage: &mut Box<dyn ProjectStorage>,
-        project: &Option<String>,
-    ) -> Result<ProjectDir> {
-        if let Some(project) = project {
-            return ProjectDir::parse(
-                project.clone() + if project.ends_with("/") { "" } else { "/" },
-            );
-        }
-
-        let cwd = current_dir()?;
-        let mut found = None;
-        for path in storage.get_projects_path()? {
-            let project = storage.get_project(path.clone())?;
-            let location = project.location.clone().unwrap();
-            if let Location::Local(project_path) = &location {
-                if cwd == *project_path {
-                    found = Some(path);
-                    break;
-                }
-            }
-        }
-
-        found.ok_or_else(|| anyhow::anyhow!("there is no project in cwd: {}", cwd.display()))
-    }
-
     fn completion(milestone: &Milestone) -> f64 {
         let done = milestone
             .tasks
@@ -79,7 +51,7 @@ impl ListTasks {
     }
 
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
-        let project_path = Self::resolve_project_path(storage, &self.project)?;
+        let project_path = get_project_path(&self.project, storage)?;
         let project = storage.get_project(project_path.clone())?;
         let milestone_name = self
             .milestone

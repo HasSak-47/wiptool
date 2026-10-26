@@ -1,10 +1,7 @@
-use std::env::current_dir;
-
-use anyhow::bail;
 use clap::Parser;
 
 use crate::cli::{get_project_path, Opts};
-use wiptool_core::{Location, ProjectDir, ProjectStorage};
+use wiptool_core::ProjectStorage;
 
 /**
 marks if the task todo is done or not

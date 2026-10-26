@@ -1,10 +1,8 @@
-use std::env::current_dir;
-
 use anyhow::{bail, Result};
 use clap::Parser;
 
-use crate::cli::Opts;
-use wiptool_core::{Location, ProjectDir, ProjectStorage};
+use crate::cli::{get_project_path, Opts};
+use wiptool_core::ProjectStorage;
 
 /**
 adds a task to a project
@@ -36,27 +34,7 @@ pub(crate) struct EditTask {
 impl EditTask {
     pub fn run(&self, _: &Opts, storage: &mut Box<dyn ProjectStorage>) -> Result<()> {
         log::debug!("{self:?}");
-        let path = if let Some(project) = &self.project {
-            // shitty ass ser/de lmao
-            ProjectDir::parse(project.clone() + if project.ends_with("/") { "" } else { "/" })?
-        } else {
-            let cwd = current_dir()?;
-            let mut p = None;
-            for path in storage.get_projects_path()? {
-                let location = storage.get_project(path.clone())?.location.unwrap();
-                if let Location::Local(project_path) = location {
-                    if cwd == project_path {
-                        p = Some(path.clone());
-                        break;
-                    }
-                }
-            }
-            if let None = p {
-                bail!("there is no project in cwd: {}", cwd.display());
-            }
-            p.unwrap()
-        };
-
+        let path = get_project_path(&self.project, storage)?;
         let mut task_path = path.clone();
         if let Some(milestone) = &self.milestone {
             if task_path.vec.iter().any(|segment| segment.is_milestone()) {
