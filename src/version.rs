@@ -3,6 +3,9 @@ use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fmt, str::FromStr};
 
+// I hate epoch and romantic so much but some people like them
+// so just in case
+// epoch is  just a superset of semantic
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Version {
     // major.minor.patch(-pre)?(+build)?

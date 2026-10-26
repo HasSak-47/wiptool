@@ -21,12 +21,19 @@ use clap::Subcommand;
 
 #[derive(Subcommand, Clone)]
 pub(crate) enum TaskCommands {
+    /// Add a task to a project milestone.
     Add(AddTask),
+    /// List tasks in a project milestone.
     List(ListTasks),
+    /// Mark a task as pending or done.
     Mark(MarkTask),
+    /// Promote a task into a project.
     Promote(PromoteTask),
+    /// Rename a task while preserving its data.
     Rename(RenameTask),
+    /// Delete a task from a project milestone.
     Delete(DeleteTask),
+    /// Edit a task's optional metadata.
     Edit(EditTask),
 }
 

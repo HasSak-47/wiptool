@@ -1,3 +1,7 @@
+/**
+ * a interface to interact with the database
+ * maybe I should just made it a SQL engine lmao
+ */
 use std::fmt::Display;
 
 use super::repr::*;

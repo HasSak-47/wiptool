@@ -1,8 +1,15 @@
+/**
+ * in memory representation of projects/milestones/tasks
+ * this is not what is saved into the DB!!
+ */
 use std::{collections::HashMap, fmt, path::PathBuf, str::FromStr};
 
 use super::version::Version;
 use serde::{Deserialize, Serialize};
 
+/**
+ * where a resource is, often another DB
+ */
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Location {
     Local(PathBuf),
@@ -191,6 +198,11 @@ pub struct Project {
     pub kinds: Vec<String>,
     pub description: String,
 
+    /**
+     * where the project is, not where the thing containing the project is
+     * like the project may be at ~/foo and the db at ~/.local/share/wiptool/foo.toml
+     * so this points to ~/foo
+     */
     pub location: Option<Location>,
     pub subprojects: HashMap<String, Project>,
 

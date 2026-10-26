@@ -53,6 +53,7 @@ pub struct Milestone {
     pub done: HashMap<String, Task>,
 }
 
+// status project repr
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Project {
     pub project: ProjectHeader,
@@ -63,6 +64,7 @@ pub struct Project {
 /**
 represents a file at location that contains a toml describing the project
 idealy it should be a status.toml at the root of the project dir
+it also contains the project
 */
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StatusDB {
@@ -556,6 +558,9 @@ struct StatusInstance {
     storage_location: Location,
     project_location: Option<Location>,
 
+    /**
+     * the project may or may not be loaded into mem yet
+     */
     #[serde(skip)]
     db: Option<StatusDB>,
 }

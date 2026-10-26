@@ -1,5 +1,6 @@
 mod completion;
 
+pub mod formatted_text;
 pub mod milestones;
 pub mod projects;
 pub mod tasks;

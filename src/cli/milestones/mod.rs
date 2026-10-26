@@ -18,10 +18,15 @@ use crate::{
 
 #[derive(Subcommand, Clone)]
 pub(crate) enum MilestoneCommands {
+    /// Add a milestone to a project.
     Add(AddMilestone),
+    /// List a project's milestones.
     List(ListMilestones),
+    /// Rename a milestone while preserving its tasks.
     Rename(RenameMilestone),
+    /// Select a project's current milestone.
     Set(SetCurrentMilestone),
+    /// Change a milestone's status.
     SetStatus(SetStatus),
 }
 

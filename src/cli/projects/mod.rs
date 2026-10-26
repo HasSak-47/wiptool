@@ -17,10 +17,15 @@ use crate::{cli::Opts, interface::ProjectStorage};
 
 #[derive(Subcommand, Clone)]
 pub(crate) enum ProjectCommands {
+    /// Stop tracking a project.
     Delete(DeleteProject),
+    /// Track a project from an existing status file.
     Init(InitProject),
+    /// List tracked projects.
     List(ProjectList),
+    /// Create and track a new project.
     New(NewProject),
+    /// Rename a tracked project.
     Rename(RenameProject),
 }
 

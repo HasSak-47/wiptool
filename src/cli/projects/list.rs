@@ -4,7 +4,10 @@ use anyhow::Result;
 use clap::{Parser, ValueEnum};
 
 use crate::{
-    cli::Opts,
+    cli::{
+        formatted_text::{ANSIColor, FormattedString, FormattedText},
+        Opts,
+    },
     interface::{ProjectDir, ProjectStorage},
     repr::{Project, Status},
 };
@@ -61,35 +64,36 @@ impl ProjectList {
         );
     }
 
-    fn generate_location_string(project: &Project, home_dir: &Option<PathBuf>) -> String {
-        return format!(
-            "\x1b[1;34m{}\x1b[0m",
-            match &project.location {
-                Some(crate::repr::Location::Local(project_location)) => {
-                    let display_location = if let Some(home) = &home_dir {
-                        match project_location.strip_prefix(home) {
-                            Ok(relative) => {
-                                if relative.as_os_str().is_empty() {
-                                    String::from("~")
-                                } else {
-                                    PathBuf::from("~").join(relative).display().to_string()
-                                }
+    fn generate_location_string(project: &Project, home_dir: &Option<PathBuf>) -> FormattedString {
+        let loc_string = match &project.location {
+            Some(crate::repr::Location::Local(project_location)) => {
+                let display_location = if let Some(home) = &home_dir {
+                    match project_location.strip_prefix(home) {
+                        Ok(relative) => {
+                            if relative.as_os_str().is_empty() {
+                                String::from("~")
+                            } else {
+                                PathBuf::from("~").join(relative).display().to_string()
                             }
-                            Err(_) => project_location.display().to_string(),
                         }
-                    } else {
-                        project_location.display().to_string()
-                    };
-                    format!("{display_location}")
-                }
-                Some(crate::repr::Location::URL(project_location)) => {
-                    format!("{project_location}")
-                }
-                None => {
-                    format!("<unknown>")
-                }
+                        Err(_) => project_location.display().to_string(),
+                    }
+                } else {
+                    project_location.display().to_string()
+                };
+                format!("{display_location}")
             }
-        );
+            Some(crate::repr::Location::URL(project_location)) => {
+                format!("{project_location}")
+            }
+            None => {
+                format!("<unknown>")
+            }
+        };
+
+        return FormattedString::new(loc_string)
+            .color(ANSIColor::BLUE)
+            .bold();
     }
 
     fn compare_todo(
@@ -163,18 +167,31 @@ impl ProjectList {
             }
         }
 
+        let mut formats = Vec::new();
+        let mut max_len_prefix = 0;
+
         for (path, project) in projects {
-            print!("{path}");
+            let mut prefix = FormattedText::new();
+            prefix.push_str(path.to_string());
+
             if self.location {
-                print!(
-                    " @ {}",
-                    ProjectList::generate_location_string(&project, &home_dir)
-                );
+                prefix.push_fmtstr(ProjectList::generate_location_string(&project, &home_dir));
             }
-            if self.state {
-                print!(" | {}", ProjectList::generate_state_string(&project));
-            }
-            println!()
+
+            let prefix = prefix.to_string();
+            max_len_prefix = std::cmp::max(prefix.len(), max_len_prefix);
+
+            let postfix = if self.state {
+                format!(" | {}", ProjectList::generate_state_string(&project))
+            } else {
+                String::new()
+            };
+
+            formats.push((prefix, postfix));
+        }
+
+        for (prefix, postfix) in formats {
+            println!("{prefix:<max_len_prefix$}{postfix}");
         }
 
         Ok(())
