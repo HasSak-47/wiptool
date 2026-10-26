@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+#[allow(dead_code)]
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(u8)]
 pub enum ANSIColor {
@@ -23,6 +24,7 @@ impl ANSIColor {
 #[derive(Debug)]
 pub enum Color {
     ANSI(ANSIColor),
+    #[allow(dead_code)]
     TrueColor(u8, u8, u8),
 }
 
@@ -75,6 +77,7 @@ impl FormattedString {
         return self;
     }
 
+    #[allow(dead_code)]
     pub fn italics(mut self) -> Self {
         self.italics = true;
         return self;
@@ -134,6 +137,7 @@ impl FormattedText {
         self.s.push(FormattedString::new(s));
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         let mut len = 0;
         for segment in &self.s {

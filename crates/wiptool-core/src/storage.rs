@@ -37,4 +37,6 @@ pub trait ProjectStorage {
     /// Creates or replaces task data.
     fn create_task(&mut self, path: ProjectDir, task: Task) -> Result<()>;
     fn delete_task(&mut self, path: ProjectDir) -> Result<()>;
+
+    fn find_project_at_location(&self, location: Location) -> Result<ProjectDir>;
 }

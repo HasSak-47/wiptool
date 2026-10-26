@@ -5,13 +5,13 @@ pub mod milestones;
 pub mod projects;
 pub mod tasks;
 
-use std::{fs::File, path::PathBuf};
+use std::{env::current_dir, fs::File, path::PathBuf};
 
 use anyhow::{bail, Result};
 use clap::{Args, Parser, Subcommand};
 
 use crate::cli::{milestones::MilestoneCommands, projects::ProjectCommands, tasks::TaskCommands};
-use wiptool_core::ProjectStorage;
+use wiptool_core::{Location, ProjectDir, ProjectStorage};
 
 use self::completion::Completion;
 
@@ -94,7 +94,7 @@ pub fn run() -> Result<()> {
     }
 
     let cluster = wiptool_dbs::StatusCluster::load(&opts.db_path)?;
-    log::debug!("storage: {cluster:#?}");
+    log::debug!("storage: {cluster:?}");
     let mut storage: Box<dyn ProjectStorage> = Box::new(cluster);
 
     match cli.command {
@@ -105,4 +105,22 @@ pub fn run() -> Result<()> {
     }
 
     Ok(())
+}
+
+// get project path use project at cwd if none are found
+pub fn get_project_path(
+    project: &Option<String>,
+    storage: &mut Box<dyn ProjectStorage>,
+) -> anyhow::Result<ProjectDir> {
+    return Ok(if let Some(project) = project {
+        // shitty ass ser/de lmao
+        ProjectDir::parse(project.clone() + if project.ends_with("/") { "" } else { "/" })?
+    } else {
+        let cwd = current_dir()?;
+        let p = storage.find_project_at_location(Location::Local(cwd.clone()));
+        if let Err(_) = p {
+            bail!("there is no project in cwd: {}", cwd.display());
+        }
+        p.unwrap()
+    });
 }

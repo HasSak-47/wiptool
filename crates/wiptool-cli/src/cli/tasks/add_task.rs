@@ -42,6 +42,7 @@ impl AddTask {
             todo: !self.done,
         };
 
+        // use passed project or the project at cwd
         let path = if let Some(project) = &self.project {
             // shitty ass ser/de lmao
             ProjectDir::parse(project.clone() + if project.ends_with("/") { "" } else { "/" })?

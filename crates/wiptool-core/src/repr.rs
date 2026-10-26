@@ -4,11 +4,15 @@
  */
 use std::{collections::HashMap, fmt, path::PathBuf, str::FromStr};
 
+use crate::ProjectDir;
+
 use super::version::Version;
 use serde::{Deserialize, Serialize};
 
 /**
- * where a resource is, often another DB
+ * where a resource is
+ * it could be another db, in case of an external storage
+ * or it could be where a project is
  */
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Location {
