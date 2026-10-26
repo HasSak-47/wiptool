@@ -862,22 +862,43 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 
 [[package]]
-name = "wiptool"
+name = "wiptool-cli"
 version = "0.6.0"
 dependencies = [
  "anyhow",
- "chrono",
  "clap",
  "clap_complete",
  "dirs",
  "env_logger",
- "fluent-uri",
  "log",
+ "toml",
+ "wiptool-core",
+ "wiptool-dbs",
+]
+
+[[package]]
+name = "wiptool-core"
+version = "0.6.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fluent-uri",
  "rand",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "wiptool-dbs"
+version = "0.6.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "serde",
+ "serde_json",
  "toml",
+ "wiptool-core",
 ]
 
 [[package]]

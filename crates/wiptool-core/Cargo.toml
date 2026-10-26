@@ -1,0 +1,15 @@
+[package]
+name = "wiptool-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+fluent-uri.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+serde_json.workspace = true

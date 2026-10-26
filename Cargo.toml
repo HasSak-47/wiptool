@@ -1,31 +1,26 @@
-[package]
-name = "wiptool"
+[workspace]
+members = [
+    "crates/wiptool-core",
+    "crates/wiptool-dbs",
+    "crates/wiptool-cli",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.6.0"
 edition = "2021"
 
-[dependencies]
-log = "0.4"
+[workspace.dependencies]
 anyhow = "1.0.79"
+chrono = { version = "0.4.38", features = ["serde"] }
 clap = { version = "4.5.60", features = ["derive"] }
+clap_complete = "4.6.9"
 dirs = "6.0.0"
+env_logger = "0.11.10"
 fluent-uri = "0.3.2"
+log = "0.4"
+rand = "0.8.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "1.0.57"
 toml = "1.0.3"
-env_logger = "0.11.10"
-clap_complete = "4.6.9"
-
-[dependencies.serde]
-version = "1.0"
-features = ["derive"]
-
-[dependencies.chrono]
-version = "0.4.38"
-features = ["serde"]
-
-# [dependencies.rusqlite]
-# version = "0.35.0"
-# features = ["bundled", "backup"]
-
-[dev-dependencies]
-serde_json = "1.0"
-rand = "0.8.5"

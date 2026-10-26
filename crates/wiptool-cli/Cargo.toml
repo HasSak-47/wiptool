@@ -1,0 +1,21 @@
+[package]
+name = "wiptool-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wiptool"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+dirs.workspace = true
+env_logger.workspace = true
+log.workspace = true
+wiptool-core = { path = "../wiptool-core" }
+wiptool-dbs = { path = "../wiptool-dbs" }
+
+[dev-dependencies]
+toml.workspace = true

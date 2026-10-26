@@ -15,3 +15,18 @@ Milestones have lifecycle statuses such as idea, planned, active, halted, stable
 For local TOML storage, project data is written to `status.toml` by default. The tracker keeps its own index of where project data is stored and where the actual project lives, so the project directory and status file do not need to be the same location.
 
 The current implementation focuses on root projects, milestones, tasks, local TOML storage, project listing, milestone listing, task listing, and shell completion generation. Subprojects and importing existing project files are still incomplete.
+
+## Workspace
+
+The codebase is split into three crates:
+
+- `wiptool-core` contains the in-memory model, project paths, versions, and the storage abstraction.
+- `wiptool-dbs` contains persistence backends and their on-disk representations.
+- `wiptool-cli` builds the `wiptool` executable and handles commands, output, and logging.
+
+Build or test the complete workspace from the repository root:
+
+```sh
+cargo build --workspace
+cargo test --workspace
+```

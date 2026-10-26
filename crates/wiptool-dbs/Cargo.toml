@@ -1,0 +1,14 @@
+[package]
+name = "wiptool-dbs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+serde.workspace = true
+toml.workspace = true
+wiptool-core = { path = "../wiptool-core" }
+
+[dev-dependencies]
+serde_json.workspace = true
